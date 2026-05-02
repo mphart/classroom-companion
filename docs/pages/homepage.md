@@ -49,10 +49,10 @@ The home page is the main page where users can create folders for classes and st
 
 ### ✅ Selection Mode
 - Activated by clicking a selection checkbox in the top left.
-- Allows selecting multiple notes and folders.
+- Allows selecting multiple lecture text files and folders.
 
 #### Actions Available:
-- Generate summary
+- Generate AI Summary
 - Delete items
 - Rename (only when one item is selected)
 
@@ -60,13 +60,15 @@ The home page is the main page where users can create folders for classes and st
 - Clicking outside items deselects all.
 - Clicking a selected item will deselect it.
 
-### 🧠 Summary Generation
-- When multiple items are selected:
-- A summary is generated using all original text from:
-  - Selected notes
-  - Notes inside selected folders
-- The summary is saved as a new item in the **current directory**.
-- The summary automatically opens in the viewing page.
+### 🧠 Generate AI Summary Button
+- The **Generate AI Summary** button appears while Selection Mode is enabled and at least one item is selected.
+- Supported input selections:
+  - One or more lecture text files
+  - One or more folders (all nested lecture files inside those folders are included recursively)
+  - A mix of folders and lecture files
+- The app combines selected source text and creates a new summary file in the **Home root directory**.
+- After creation, the generated summary opens automatically in the Viewer page.
+- If the user selects only folders/files that do not contain lecture text content, generation is blocked and the user is prompted to select valid lecture files.
 
 
 ## 🌐 Homepage APIs (MVP)
@@ -134,5 +136,5 @@ POST /ai/summarize
 {
   "noteIds": [1, 2],
   "folderIds": [3],
-  "outputDirectory": "userId/physics/"
+  "outputDirectory": "userId/"
 }

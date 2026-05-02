@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import logo from '@/assets/corner-logo.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
 import {
-  buildPath,
   collectDescendantIds,
   getChildren,
   getFolderPath,
@@ -51,7 +50,9 @@ export function Home() {
       }
       setSelectedItems(newSelected);
     } else {
-      if (item.type === 'file') {
+      if (item.type === 'folder') {
+        setCurrentPath(getFolderPath(item));
+      } else {
         navigate('/viewer', {
           state: {
             title: item.name,
@@ -59,12 +60,6 @@ export function Home() {
           },
         });
       }
-    }
-  };
-
-  const handleItemDoubleClick = (item: LibraryItem) => {
-    if (!selectionMode && item.type === 'folder') {
-      setCurrentPath(getFolderPath(item));
     }
   };
 
@@ -357,6 +352,12 @@ export function Home() {
           </label>
         </div>
 
+        <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Generate AI Summary:</span>{' '}
+          Turn on Select mode, choose lecture files and/or folders, then click Generate. Folder selection is recursive,
+          and the generated summary is saved to the Home root directory.
+        </div>
+
         {selectionMode && selectedItems.size > 0 && (
           <div className="mb-6 flex items-center gap-3">
             <button
@@ -382,7 +383,6 @@ export function Home() {
             <div
               key={item.id}
               onClick={() => handleItemClick(item)}
-              onDoubleClick={() => handleItemDoubleClick(item)}
               className={`p-4 bg-card border border-border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
                 selectedItems.has(item.id) ? 'ring-2' : ''
               }`}

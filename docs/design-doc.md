@@ -60,7 +60,7 @@ All AI features are powered by the **Cursor API**.
 - Generate key terms, definitions, and study questions from a transcript
 
 ### Exam Prep
-Users can select multiple notes or folders and generate a consolidated summary for exam preparation. This summary is saved as a new item in the current directory and opens immediately in the Viewer Page.
+Users can select multiple lecture files or folders and generate a consolidated summary for exam preparation. Folder selection is recursive (nested lecture files are included). The generated summary is saved as a new item in the Home/root directory and opens immediately in the Viewer Page.
 
 ### Saving
 Each recording session saves three versions of the content:
@@ -180,7 +180,7 @@ Sign Up → Log In → Home Page → Start Recording → Active Recording Page
 - Activated by clicking the selection checkbox (top left of content area)
 - Allows selecting multiple notes and folders
 - Actions when items are selected:
-  - **Generate Summary** — creates an AI summary from all selected content, saves it to current directory, opens in Viewer Page
+  - **Generate AI Summary** — creates an AI summary from all selected content (including nested files in selected folders), saves it to the Home/root directory, opens in Viewer Page
   - **Delete**
   - **Rename** (only when exactly one item is selected)
 - Clicking outside items deselects all

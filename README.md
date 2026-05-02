@@ -25,6 +25,12 @@ Within a particular ecosystem, there may be a common way of installing things, s
 ## Usage
 Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
+### Generate AI Summary button
+- On the Home page, enable Selection Mode and select lecture files and/or folders.
+- Click **Generate AI Summary** to create a combined summary from selected sources.
+- Folder selection is recursive (lecture files in nested folders are included).
+- Generated summaries are saved to the Home/root directory and open in the Viewer page automatically.
+
 ## Roadmap
 See docs/design-doc.md for details
 

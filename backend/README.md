@@ -19,6 +19,15 @@ Default server port is `4000`.
 - `DB_USER=root`
 - `DB_PASSWORD=`
 - `DB_NAME=classroom_companion`
+- **`DEEPGRAM_API_KEY=`** — required for `/transcription/stream` WebSocket realtime STT
+
+Optional transcription tuning:
+
+- `DG_MODEL=nova-2`
+- `DG_ENDPOINTING_MS=300`
+- `DEEPGRAM_WS_HOST=wss://api.deepgram.com`
+
+Frontend connects with `VITE_API_URL=http://localhost:4000` (REST) and derives `ws://localhost:4000/transcription/stream`, unless you override with **`VITE_WS_URL`** (same host/port scheme as the API).
 
 ## Database
 

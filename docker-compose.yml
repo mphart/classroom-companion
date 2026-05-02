@@ -32,6 +32,7 @@ services:
       DB_NAME: classroom_companion
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
     depends_on:
       db:
         condition: service_healthy

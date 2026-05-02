@@ -508,13 +508,13 @@ export function Home() {
               <button
                 type="button"
                 role="radio"
-                aria-checked={fileViewMode === 'list'}
-                aria-label="List view"
-                onClick={() => setFileViewMode('list')}
+                aria-checked={fileViewMode === 'timeline'}
+                aria-label="Timeline view"
+                onClick={() => setFileViewMode('timeline')}
                 className={cn(
                   'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  fileViewMode === 'list'
+                  fileViewMode === 'timeline'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
@@ -540,13 +540,13 @@ export function Home() {
               <button
                 type="button"
                 role="radio"
-                aria-checked={fileViewMode === 'timeline'}
-                aria-label="Timeline view"
-                onClick={() => setFileViewMode('timeline')}
+                aria-checked={fileViewMode === 'list'}
+                aria-label="List view"
+                onClick={() => setFileViewMode('list')}
                 className={cn(
                   'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  fileViewMode === 'timeline'
+                  fileViewMode === 'list'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}

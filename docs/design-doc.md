@@ -35,7 +35,7 @@ The website should feel **inviting and trustworthy** — something students genu
 - Frontend: TypeScript + React + TailwindCSS + Vite
 - No inline CSS unless absolutely necessary. All styling via Tailwind utility classes.
 - Backend: Node.js + Express
-- Database: MongoDB
+- Database: MySQL
 - Speech-to-Text: Deepgram (https://deepgram.com) — real-time streaming via WebSocket
 - AI Summarization: Cursor API
 

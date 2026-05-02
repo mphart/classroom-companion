@@ -12,6 +12,7 @@ type ItemRow = RowDataPacket & {
   directory_path: string;
   created_at: Date;
   updated_at: Date;
+  note_source_type?: "recording" | "generated_summary" | null;
 };
 
 type NoteRow = RowDataPacket & {
@@ -61,6 +62,7 @@ export class MySqlRepository implements Repository {
       directoryPath: row.directory_path,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      noteSourceType: row.type === "note" ? row.note_source_type ?? undefined : undefined,
     };
   }
 
@@ -108,17 +110,26 @@ export class MySqlRepository implements Repository {
 
   async listItems(params: ListItemsParams): Promise<Item[]> {
     const sortByMap: Record<SortBy, string> = {
-      name: "name",
-      creationDate: "created_at",
-      lastEditedDate: "updated_at",
+      name: "i.name",
+      creationDate: "i.created_at",
+      lastEditedDate: "i.updated_at",
     };
     const sortBy = sortByMap[params.sortBy ?? "lastEditedDate"];
     const sortDir: SortDir = params.sortDir ?? "desc";
     const query = params.query ? `%${params.query}%` : null;
     const sql = `
-      SELECT id, user_id, type, name, directory_path, created_at, updated_at
-      FROM items
-      WHERE user_id = ? AND directory_path = ? AND (? IS NULL OR name LIKE ?)
+      SELECT
+        i.id,
+        i.user_id,
+        i.type,
+        i.name,
+        i.directory_path,
+        i.created_at,
+        i.updated_at,
+        n.source_type AS note_source_type
+      FROM items i
+      LEFT JOIN notes n ON i.type = 'note' AND n.item_id = i.id
+      WHERE i.user_id = ? AND i.directory_path = ? AND (? IS NULL OR i.name LIKE ?)
       ORDER BY ${sortBy} ${sortDir === "asc" ? "ASC" : "DESC"}
     `;
     const [rows] = await this.pool.execute<ItemRow[]>(sql, [

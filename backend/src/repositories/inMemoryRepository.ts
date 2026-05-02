@@ -52,7 +52,14 @@ export class InMemoryRepository implements Repository {
       if (sortBy === "lastEditedDate") delta = a.updatedAt.getTime() - b.updatedAt.getTime();
       return sortDir === "asc" ? delta : -delta;
     });
-    return result;
+    return result.map((item) => {
+      if (item.type !== "note") return item;
+      const note = this.notes.find((n) => n.itemId === item.id);
+      return {
+        ...item,
+        noteSourceType: note?.sourceType ?? "recording",
+      };
+    });
   }
 
   async createFolder(input: { userId: number; name: string; directoryPath: string }): Promise<Item> {

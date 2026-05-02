@@ -33,4 +33,15 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  server: {
+    proxy: {
+      '/auth': 'http://127.0.0.1:4000',
+      '/items': 'http://127.0.0.1:4000',
+      '/folders': 'http://127.0.0.1:4000',
+      '/notes': 'http://127.0.0.1:4000',
+      '/ai': 'http://127.0.0.1:4000',
+      '/health': 'http://127.0.0.1:4000',
+    },
+  },
 })

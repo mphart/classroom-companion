@@ -1,24 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
+import { getSessionUser } from '@/app/lib/authSession';
+import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
-import {
-  buildPath,
-  ensureFolder,
-  getRootPath,
-  LibraryItem,
-  loadLibraryItems,
-  saveLibraryItems,
-} from '@/app/lib/library';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
+  const sessionUser = getSessionUser();
+  const userId = sessionUser?.id ?? null;
+
+  const userRoot = useMemo(() => (userId === null ? null : userRootDirectory(userId)), [userId]);
+
   const [lectureName, setLectureName] = useState(() => {
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     return `Lecture-${month}-${day}`;
   });
+  const [courseFolders, setCourseFolders] = useState<ListedItemDto[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [language, setLanguage] = useState('English');
   const [notes, setNotes] = useState<string[]>(['']);
@@ -29,8 +30,7 @@ export function ActiveRecording() {
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
   const [saveLocation, setSaveLocation] = useState<'home' | 'course'>('home');
-
-  const courses = ['Physics', 'Mathematics', 'Chemistry', 'Biology'];
+  const [loadingCourses, setLoadingCourses] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -41,6 +41,46 @@ export function ActiveRecording() {
     }
     return () => clearInterval(interval);
   }, [isRecording, isPaused]);
+
+  useEffect(() => {
+    if (!isRecording || isPaused) return undefined;
+
+    const sampleTexts = [
+      'Today we will be discussing quantum mechanics and wave-particle duality.',
+      'The Schrödinger equation is fundamental to understanding quantum systems.',
+      'Remember that observation affects the state of quantum particles.',
+      'This concept will be on the midterm exam.',
+    ];
+
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      if (index > sampleTexts.length) {
+        window.clearInterval(timer);
+        return;
+      }
+      setTranscript((prev) => prev + (prev ? ' ' : '') + sampleTexts[index - 1]);
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [isRecording, isPaused]);
+
+  const reloadCourses = useCallback(async () => {
+    if (!userRoot) return;
+    setLoadingCourses(true);
+    try {
+      const items = await listItems({ directory: userRoot, sortBy: 'name', sortDir: 'asc' });
+      setCourseFolders(items.filter((i) => i.type === 'folder'));
+    } catch {
+      window.alert('Could not load folders from Home. Create a folder on Home first.');
+    } finally {
+      setLoadingCourses(false);
+    }
+  }, [userRoot]);
+
+  useEffect(() => {
+    void reloadCourses();
+  }, [reloadCourses]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -69,26 +109,27 @@ export function ActiveRecording() {
 
   const handleStartRecording = () => {
     if (saveLocation === 'course' && !selectedCourse) {
-      alert('Please select a course first');
+      window.alert('Please select or create a course folder first.');
       return;
     }
+    setTranscript('');
+    setElapsedTime(0);
     setIsRecording(true);
     setIsPaused(false);
-    simulateTranscription();
   };
 
   const handlePauseRecording = () => {
     setIsPaused(!isPaused);
   };
 
-  const handleStopRecording = () => {
+  const handleStopRecording = async () => {
+    if (!userRoot) return;
+    if (saveLocation === 'course' && !selectedCourse) {
+      window.alert('Please select a course folder.');
+      return;
+    }
+
     setIsRecording(false);
-    const allItems = loadLibraryItems();
-    const withCourseFolder =
-      saveLocation === 'course' && selectedCourse ? ensureFolder(allItems, selectedCourse, getRootPath()) : allItems;
-    const parentPath =
-      saveLocation === 'course' && selectedCourse ? buildPath(getRootPath(), selectedCourse) : getRootPath();
-    const timestamp = new Date().toISOString();
 
     const cleanedNotes = notes
       .map((note) => note.trim())
@@ -96,83 +137,64 @@ export function ActiveRecording() {
       .map((note) => `- ${note}`)
       .join('\n');
 
-    const lectureContent = [
+    const directory =
+      saveLocation === 'course' ? joinDirectory(userRoot, selectedCourse) : userRoot;
+
+    const rawText = [
       `Lecture: ${lectureName}`,
-      `Course: ${selectedCourse}`,
+      `Course Folder: ${saveLocation === 'course' ? selectedCourse : '(Home root)'}`,
       `Language: ${language}`,
       '',
       'Notes:',
       cleanedNotes || '- No notes were captured.',
       '',
       'Transcript:',
-      transcript || 'No transcript available.',
+      transcript || 'No transcript captured yet.',
     ].join('\n');
 
-    const newLectureFile: LibraryItem = {
-      id: crypto.randomUUID(),
-      name: `${lectureName}.txt`,
-      type: 'file',
-      parentPath,
-      updatedAt: timestamp,
-      fileKind: 'lecture',
-      content: lectureContent,
-    };
-
-    saveLibraryItems([...withCourseFolder, newLectureFile]);
-    navigate('/home');
-  };
-
-  const simulateTranscription = () => {
-    const sampleTexts = [
-      'Today we will be discussing quantum mechanics and wave-particle duality.',
-      'The Schrödinger equation is fundamental to understanding quantum systems.',
-      'Remember that observation affects the state of quantum particles.',
-      'This concept will be on the midterm exam.',
-    ];
-
-    let index = 0;
-    const interval = setInterval(() => {
-      if (isPaused) {
-        return;
-      }
-
-      setTranscript((prev) => {
-        if (index < sampleTexts.length) {
-          index++;
-          return prev + (prev ? ' ' : '') + sampleTexts[index - 1];
-        }
-        return prev;
+    try {
+      await createNote({
+        title: lectureName.trim(),
+        directory,
+        rawText,
+        language,
+        durationSeconds: elapsedTime,
       });
-    }, 3000);
-  };
-
-  const handleCreateCourse = () => {
-    if (newCourseName.trim()) {
-      setSelectedCourse(newCourseName);
-      setShowCourseModal(false);
-      setNewCourseName('');
+      navigate('/home');
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to save recording');
+      setIsRecording(false);
     }
   };
+
+  const handleCreateCourse = async () => {
+    const name = newCourseName.trim();
+    if (!name || !userRoot) return;
+    try {
+      await createFolder(name, userRoot);
+      await reloadCourses();
+      setSelectedCourse(name);
+      setShowCourseModal(false);
+      setNewCourseName('');
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to create course folder');
+    }
+  };
+
+  if (!sessionUser || userId === null || !userRoot) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       <div className="w-80 bg-card border-r border-border p-6 flex flex-col">
-        <button
-          onClick={() => navigate('/home')}
-          className="mb-8"
-        >
-          <img
-            src={logo}
-            alt="ClassroomCompanion"
-            className="h-16 w-full object-contain"
-          />
+        <button onClick={() => navigate('/home')} className="mb-8">
+          <img src={logo} alt="ClassroomCompanion" className="h-16 w-full object-contain" />
         </button>
 
         <div className="flex-1 space-y-6">
           <div>
-            <label className="block text-sm mb-2 text-muted-foreground">
-              Lecture Name
-            </label>
+            <label className="block text-sm mb-2 text-muted-foreground">Lecture Name</label>
             <input
               type="text"
               value={lectureName}
@@ -184,9 +206,7 @@ export function ActiveRecording() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-muted-foreground">
-              Course
-            </label>
+            <label className="block text-sm mb-2 text-muted-foreground">Course</label>
             <select
               value={selectedCourse}
               onChange={(e) => {
@@ -196,14 +216,14 @@ export function ActiveRecording() {
                   setSelectedCourse(e.target.value);
                 }
               }}
-              disabled={isRecording}
+              disabled={isRecording || loadingCourses}
               className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
-              <option value="">Select a course</option>
-              {courses.map((course) => (
-                <option key={course} value={course}>
-                  {course}
+              <option value="">{loadingCourses ? 'Loading folders…' : 'Select a course folder'}</option>
+              {courseFolders.map((folder) => (
+                <option key={folder.id} value={folder.name}>
+                  {folder.name}
                 </option>
               ))}
               <option value="create-new">+ Create New Course</option>
@@ -211,9 +231,7 @@ export function ActiveRecording() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-muted-foreground">
-              Language
-            </label>
+            <label className="block text-sm mb-2 text-muted-foreground">Language</label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
@@ -230,9 +248,7 @@ export function ActiveRecording() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-muted-foreground">
-              Save Recording Output
-            </label>
+            <label className="block text-sm mb-2 text-muted-foreground">Save Recording Output</label>
             <select
               value={saveLocation}
               onChange={(e) => setSaveLocation(e.target.value as 'home' | 'course')}
@@ -280,11 +296,7 @@ export function ActiveRecording() {
         <div className="flex-1 p-6 overflow-y-auto">
           <div className="max-w-4xl mx-auto">
             <div className="bg-card rounded-lg shadow-sm border border-border p-6 min-h-96">
-              {transcript || (
-                <p className="text-muted-foreground">
-                  Click Start to begin recording...
-                </p>
-              )}
+              {transcript || <p className="text-muted-foreground">Click Start to begin recording...</p>}
               {transcript && <p className="whitespace-pre-wrap">{transcript}</p>}
             </div>
           </div>
@@ -294,7 +306,7 @@ export function ActiveRecording() {
           <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
             {!isRecording ? (
               <button
-                onClick={handleStartRecording}
+                onClick={() => handleStartRecording()}
                 className="px-8 py-3 text-white rounded-lg transition-colors"
                 style={{ backgroundColor: 'var(--brand)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
@@ -311,14 +323,12 @@ export function ActiveRecording() {
                   {isPaused ? 'Resume' : 'Pause'}
                 </button>
                 <button
-                  onClick={handleStopRecording}
+                  onClick={() => void handleStopRecording()}
                   className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
                   Finish & Exit
                 </button>
-                <div className="ml-4 text-xl">
-                  {formatTime(elapsedTime)}
-                </div>
+                <div className="ml-4 text-xl">{formatTime(elapsedTime)}</div>
               </>
             )}
           </div>
@@ -328,7 +338,7 @@ export function ActiveRecording() {
       {showCourseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-card border border-border rounded-lg p-6 w-96">
-            <h3 className="text-xl mb-4">Create New Course</h3>
+            <h3 className="text-xl mb-4">Create New Course Folder</h3>
             <input
               type="text"
               value={newCourseName}
@@ -340,7 +350,7 @@ export function ActiveRecording() {
             />
             <div className="flex gap-3">
               <button
-                onClick={handleCreateCourse}
+                onClick={() => void handleCreateCourse()}
                 className="flex-1 px-4 py-2 text-white rounded-lg transition-colors"
                 style={{ backgroundColor: 'var(--brand)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}

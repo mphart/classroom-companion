@@ -20,6 +20,8 @@ export interface Item {
   directoryPath: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Present for `note` rows when enriched from the notes table (for UI listing). */
+  noteSourceType?: Note["sourceType"] | null;
 }
 
 export interface Note {

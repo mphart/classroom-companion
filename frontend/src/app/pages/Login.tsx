@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
+import { login as loginRequest } from '@/app/lib/api';
+import { getToken, setSession } from '@/app/lib/authSession';
 
 export function Login() {
   const navigate = useNavigate();
@@ -9,6 +11,11 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    navigate('/home', { replace: true });
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,10 +27,15 @@ export function Login() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const { token, user } = await loginRequest({ username: username.trim(), password });
+      setSession(token, user);
       navigate('/home');
-    }, 500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

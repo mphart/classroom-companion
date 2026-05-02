@@ -121,7 +121,7 @@ export class InMemoryRepository implements Repository {
     const note: Note = {
       itemId: item.id,
       rawText: input.rawText,
-      aiSummary: null,
+      aiSummary: input.aiSummary ?? null,
       language: input.language,
       durationSeconds: input.durationSeconds,
       sourceType: input.sourceType ?? "recording",

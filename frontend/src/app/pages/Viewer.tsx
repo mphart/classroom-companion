@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
-import { getNote, type NoteDto } from '@/app/lib/api';
+import { getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 type ViewerState = {
@@ -16,6 +16,7 @@ export function Viewer() {
   const noteId = viewerState?.noteId;
   const [note, setNote] = useState<NoteDto | null>(null);
   const [loading, setLoading] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -38,16 +39,35 @@ export function Viewer() {
     };
   }, [noteId]);
 
+  const handleGeminiSummarize = async () => {
+    if (noteId === undefined || !note?.rawText.trim()) return;
+    setSummarizing(true);
+    setError('');
+    try {
+      const updated = await regenerateNoteAiSummary(noteId);
+      setNote(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
   if (!noteId) {
     return <Navigate to="/home" replace />;
   }
 
   const subtitle =
     note && note.sourceType === 'generated_summary' && typeof note.generatedFromCount === 'number'
-      ? `Generated • ${note.generatedFromCount} source notes`
+      ? `Gemini-generated • merged from ${note.generatedFromCount} source note(s)`
       : note
-        ? 'Saved note'
+        ? note.sourceType === 'generated_summary'
+          ? 'Gemini-generated summary note'
+          : 'Saved lecture note'
         : '';
+
+  const contentHeading =
+    note?.sourceType === 'generated_summary' ? 'Gemini-generated summary (full text)' : 'Note contents';
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
@@ -77,14 +97,25 @@ export function Viewer() {
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="bg-card border-b border-border px-6 py-4 flex flex-wrap items-center gap-4 justify-between">
+          <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={() => navigate('/home')}
               className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
             >
               ← Back to Home
             </button>
+            {note?.sourceType === 'recording' ? (
+              <button
+                type="button"
+                disabled={summarizing || loading || !note.rawText.trim()}
+                onClick={() => void handleGeminiSummarize()}
+                className="px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                {summarizing ? 'Generating…' : 'Summarize with Gemini'}
+              </button>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -102,14 +133,14 @@ export function Viewer() {
                   <h1 className="text-3xl mt-2">{note.title}</h1>
                   {note.aiSummary ? (
                     <div>
-                      <h2 className="text-2xl mb-3">AI Summary</h2>
+                      <h2 className="text-2xl mb-3">AI summary</h2>
                       <pre className="whitespace-pre-wrap text-sm bg-muted/40 border border-border rounded-lg p-4">
                         {note.aiSummary}
                       </pre>
                     </div>
                   ) : null}
                   <div>
-                    <h2 className="text-2xl mb-3">Content</h2>
+                    <h2 className="text-2xl mb-3">{contentHeading}</h2>
                     <pre className="whitespace-pre-wrap text-sm leading-relaxed">{note.rawText}</pre>
                   </div>
                 </div>

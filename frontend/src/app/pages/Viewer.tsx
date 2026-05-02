@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
+import { MarkdownPreview } from '@/app/components/MarkdownPreview';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 type ViewerState = {
@@ -134,14 +135,16 @@ export function Viewer() {
                   {note.aiSummary ? (
                     <div>
                       <h2 className="text-2xl mb-3">AI summary</h2>
-                      <pre className="whitespace-pre-wrap text-sm bg-muted/40 border border-border rounded-lg p-4">
-                        {note.aiSummary}
-                      </pre>
+                      <div className="rounded-lg border border-border bg-muted/20 p-6">
+                        <MarkdownPreview markdown={note.aiSummary} />
+                      </div>
                     </div>
                   ) : null}
                   <div>
                     <h2 className="text-2xl mb-3">{contentHeading}</h2>
-                    <pre className="whitespace-pre-wrap text-sm leading-relaxed">{note.rawText}</pre>
+                    <div className="rounded-lg border border-border bg-muted/10 p-6">
+                      <MarkdownPreview markdown={note.rawText} />
+                    </div>
                   </div>
                 </div>
               ) : null}

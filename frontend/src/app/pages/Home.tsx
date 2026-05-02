@@ -15,7 +15,6 @@ import {
   pathTitleSegments,
   userRootDirectory,
 } from '@/app/lib/pathUtils';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function Home() {
   const navigate = useNavigate();
@@ -234,7 +233,6 @@ export function Home() {
             </div>
 
             <div className="relative flex items-center gap-3">
-              <ThemeToggle />
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="w-10 h-10 rounded-full text-white flex items-center justify-center"
@@ -342,9 +340,11 @@ export function Home() {
         </div>
 
         <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Generate AI Summary:</span> Turn on Select mode, choose notes
-          and/or folders (folders include everything inside recursively), then click Generate. The generated summary note
-          is saved to Home and opens in Viewer.
+          <span className="font-medium text-foreground">Generate AI Summary:</span> Uses Google Gemini on your backend
+          (<code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_API_KEY</code> in <code className="text-xs bg-muted px-1 py-0.5 rounded">backend/.env</code> or Compose;
+          optional <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_MODEL</code>, default{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">gemini-flash-latest</code>). Turn on Select mode, pick notes
+          and/or folders (folders include all notes inside), then click Generate.
         </div>
 
         {selectionMode && selectedItems.size > 0 && (

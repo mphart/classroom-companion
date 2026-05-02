@@ -60,13 +60,13 @@ async function fetchJson(method: string, path: string, body?: unknown): Promise<
   const payload = await parseBody(res);
 
   if (!res.ok) {
-    const message =
-      typeof payload === 'object' &&
-      payload !== null &&
-      'error' in payload &&
-      typeof (payload as { error: unknown }).error === 'string'
-        ? (payload as { error: string }).error
-        : `${res.status} ${res.statusText}`;
+    let message = `${res.status} ${res.statusText}`;
+    const errField =
+      typeof payload === 'object' && payload !== null && 'error' in payload
+        ? (payload as { error: unknown }).error
+        : undefined;
+    if (typeof errField === 'string') message = errField;
+    else if (typeof errField === 'number' || typeof errField === 'boolean') message = String(errField);
 
     if (res.status === 401 && !suppressAuthHardRedirect(path)) {
       clearSession();
@@ -137,6 +137,11 @@ export async function summarizeSelection(body: {
   title: string;
 }): Promise<{ note: NoteDto; sourceCount: number }> {
   return apiPost('/ai/summarize/selection', body) as Promise<{ note: NoteDto; sourceCount: number }>;
+}
+
+export async function regenerateNoteAiSummary(noteId: number): Promise<NoteDto> {
+  const payload = (await apiPost(`/ai/summarize/note/${noteId}`, {})) as { note: NoteDto };
+  return payload.note;
 }
 
 export async function login(body: { username: string; password: string }) {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 import { signup as signupRequest } from '@/app/lib/api';
 import { getToken, setSession } from '@/app/lib/authSession';
 
@@ -60,10 +59,7 @@ export function Signup() {
         </div>
       </div>
 
-      <div className="w-1/2 relative flex items-center justify-center bg-background">
-        <div className="absolute right-6 top-6">
-          <ThemeToggle />
-        </div>
+      <div className="w-1/2 flex items-center justify-center bg-background">
         <div className="w-full max-w-md px-8">
           <h2 className="text-3xl mb-2">Create your account.</h2>
           <p className="text-muted-foreground mb-8">It only takes a moment.</p>

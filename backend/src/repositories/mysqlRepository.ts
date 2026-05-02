@@ -196,10 +196,11 @@ export class MySqlRepository implements Repository {
       );
       const itemId = (itemResult as { insertId: number }).insertId;
       await connection.execute(
-        "INSERT INTO notes (item_id, raw_text, ai_summary, language, duration_seconds, source_type, generated_from_count) VALUES (?, ?, NULL, ?, ?, ?, ?)",
+        "INSERT INTO notes (item_id, raw_text, ai_summary, language, duration_seconds, source_type, generated_from_count) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           itemId,
           input.rawText,
+          input.aiSummary ?? null,
           input.language,
           input.durationSeconds,
           input.sourceType ?? "recording",

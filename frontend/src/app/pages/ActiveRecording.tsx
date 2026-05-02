@@ -4,7 +4,6 @@ import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
 import { getSessionUser } from '@/app/lib/authSession';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -33,36 +32,13 @@ export function ActiveRecording() {
   const [loadingCourses, setLoadingCourses] = useState(false);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isRecording && !isPaused) {
       interval = setInterval(() => {
         setElapsedTime((prev) => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isRecording, isPaused]);
-
-  useEffect(() => {
-    if (!isRecording || isPaused) return undefined;
-
-    const sampleTexts = [
-      'Today we will be discussing quantum mechanics and wave-particle duality.',
-      'The Schrödinger equation is fundamental to understanding quantum systems.',
-      'Remember that observation affects the state of quantum particles.',
-      'This concept will be on the midterm exam.',
-    ];
-
-    let index = 0;
-    const timer = window.setInterval(() => {
-      index += 1;
-      if (index > sampleTexts.length) {
-        window.clearInterval(timer);
-        return;
-      }
-      setTranscript((prev) => prev + (prev ? ' ' : '') + sampleTexts[index - 1]);
-    }, 3000);
-
-    return () => window.clearInterval(timer);
   }, [isRecording, isPaused]);
 
   const reloadCourses = useCallback(async () => {
@@ -125,7 +101,7 @@ export function ActiveRecording() {
   const handleStopRecording = async () => {
     if (!userRoot) return;
     if (saveLocation === 'course' && !selectedCourse) {
-      window.alert('Please select a course folder.');
+      window.alert('Please select or create a course folder.');
       return;
     }
 
@@ -149,7 +125,7 @@ export function ActiveRecording() {
       cleanedNotes || '- No notes were captured.',
       '',
       'Transcript:',
-      transcript || 'No transcript captured yet.',
+      transcript.trim() || '(no transcript — open this note later or use Generate AI Summary on multiple notes)',
     ].join('\n');
 
     try {
@@ -294,11 +270,29 @@ export function ActiveRecording() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-card rounded-lg shadow-sm border border-border p-6 min-h-96">
-              {transcript || <p className="text-muted-foreground">Click Start to begin recording...</p>}
-              {transcript && <p className="whitespace-pre-wrap">{transcript}</p>}
+          <div className="max-w-4xl mx-auto space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="lecture-transcript" className="text-sm font-medium text-foreground">
+                Transcript & lecture capture
+              </label>
+              {isRecording ? (
+                <span className="text-xs text-muted-foreground">{isPaused ? 'Paused' : 'Session running'}</span>
+              ) : null}
             </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              There is no mock transcript — type live, paste from captions, or leave blank and capture text from your
+              notes only. Saved content is sent to your library and can be summarized with Gemini from Home (Select +
+              Generate).
+            </p>
+            <textarea
+              id="lecture-transcript"
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              spellCheck
+              placeholder="Type lecture content here, paste slide text, paste automated captions …"
+              className="w-full min-h-[280px] rounded-lg border border-border bg-input-background p-4 text-sm leading-relaxed focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+            />
           </div>
         </div>
 
@@ -312,7 +306,7 @@ export function ActiveRecording() {
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
               >
-                Start Recording
+                Start Session
               </button>
             ) : (
               <>

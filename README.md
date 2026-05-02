@@ -7,7 +7,7 @@ Classroom Companion is a web app for recording lectures, organizing sessions by 
 - `frontend/` — React + Vite UI
 - `backend/` — Express API + MySQL persistence
 - `docker/` — Dockerfiles and nginx config used by Compose
-- `docs/` — design and page specs
+- `docs/` — design and page specs; **[`docs/agent-reference.md`](docs/agent-reference.md)** — stack, env, Docker, STT, and troubleshooting for contributors/agents
 
 ## Run everything with Docker Compose
 

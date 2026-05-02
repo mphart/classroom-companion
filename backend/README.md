@@ -1,5 +1,7 @@
 # ClassroomCompanion Backend (MVP)
 
+To run API + UI + database together without a local toolchain, use **`docker compose` from the repository root** (see root `README.md`).
+
 ## Run
 
 - `npm install`

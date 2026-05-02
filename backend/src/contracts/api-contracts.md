@@ -19,7 +19,8 @@ All protected routes require `Authorization: Bearer <jwt>`.
 
 - `GET /items?directory=userId/physics/&q=chapter&sortBy=lastEditedDate&sortDir=desc`
   - Response `200`:
-    - `{ "items": [{ "id": 9, "type": "note", "name": "Lecture 3", "directory": "userId/physics/", "createdDate": "...", "lastEditedDate": "..." }] }`
+    - `{ "items": [{ "id": 9, "type": "note", "name": "Lecture 3", "directory": "userId/physics/", "createdDate": "...", "lastEditedDate": "...", "noteSourceType": "recording" }] }`
+      - `noteSourceType` is only included for `note` items (`recording` vs `generated_summary`)
 - `POST /folders`
   - Request: `{ "name": "Physics", "directory": "userId/" }`
   - Response `201`: `{ "item": { "id": 3, "type": "folder", "name": "Physics", "directory": "userId/", "createdDate": "...", "lastEditedDate": "..." } }`

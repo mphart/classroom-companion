@@ -1,217 +1,177 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router';
 import logo from '@/assets/corner-logo.svg';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 import {
-  collectDescendantIds,
-  getChildren,
-  getFolderPath,
-  getRootPath,
-  LibraryItem,
-  loadLibraryItems,
-  saveLibraryItems,
-  summarizeLectureContent,
-} from '@/app/lib/library';
+  createFolder,
+  deleteItems,
+  listItems,
+  summarizeSelection,
+  type ListedItemDto,
+} from '@/app/lib/api';
+import { clearSession, getSessionUser } from '@/app/lib/authSession';
+import {
+  joinDirectory,
+  parentDirectory,
+  pathTitleSegments,
+  userRootDirectory,
+} from '@/app/lib/pathUtils';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function Home() {
   const navigate = useNavigate();
-  const rootPath = getRootPath();
-  const [currentPath, setCurrentPath] = useState(rootPath);
+  const sessionUser = getSessionUser();
+
+  const userId = sessionUser?.id;
+  const userRoot = useMemo(() => (userId !== undefined ? userRootDirectory(userId) : null), [userId]);
+
+  const [currentDirectory, setCurrentDirectory] = useState<string | null>(userRoot);
+  const [items, setItems] = useState<ListedItemDto[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
-  const [items, setItems] = useState<LibraryItem[]>(() => loadLibraryItems());
-  const newMenuRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    saveLibraryItems(items);
-  }, [items]);
+    setCurrentDirectory(userRoot);
+  }, [userRoot]);
+
+  const sortApi = useMemo(() => {
+    if (sortBy === 'name') return { sortBy: 'name' as const, sortDir: 'asc' as const };
+    if (sortBy === 'lastEdited') return { sortBy: 'lastEditedDate' as const, sortDir: 'desc' as const };
+    return { sortBy: 'creationDate' as const, sortDir: 'desc' as const };
+  }, [sortBy]);
+
+  const loadItems = useCallback(async () => {
+    if (!userRoot || !currentDirectory) return;
+    setLoading(true);
+    setError('');
+    try {
+      const fetched = await listItems({
+        directory: currentDirectory,
+        q: searchQuery.trim() || undefined,
+        ...sortApi,
+      });
+      setItems(fetched);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load items');
+    } finally {
+      setLoading(false);
+    }
+  }, [userRoot, currentDirectory, searchQuery, sortApi]);
 
   useEffect(() => {
-    if (!showNewMenu) {
+    void loadItems();
+  }, [loadItems]);
+
+  const atRoot = userRoot !== null && currentDirectory === userRoot;
+
+  const handleLogout = () => {
+    clearSession();
+    navigate('/', { replace: true });
+  };
+
+  const toggleSelected = (id: number) => {
+    const next = new Set(selectedItems);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedItems(next);
+  };
+
+  const handleItemClick = (item: ListedItemDto) => {
+    if (selectionMode) {
+      toggleSelected(item.id);
       return;
     }
 
-    const handleOutsideClick = (event: MouseEvent) => {
-      const targetNode = event.target as Node;
-      if (newMenuRef.current && !newMenuRef.current.contains(targetNode)) {
-        setShowNewMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [showNewMenu]);
-
-  const visibleItems = useMemo(() => getChildren(items, currentPath), [items, currentPath]);
-
-  const filteredItems = visibleItems
-    .filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'lastEdited') return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      return 0;
-    });
-
-  const handleItemClick = (item: LibraryItem) => {
-    if (selectionMode) {
-      const newSelected = new Set(selectedItems);
-      if (newSelected.has(item.id)) {
-        newSelected.delete(item.id);
-      } else {
-        newSelected.add(item.id);
-      }
-      setSelectedItems(newSelected);
-    } else {
-      if (item.type === 'folder') {
-        setCurrentPath(getFolderPath(item));
-      } else {
-        navigate('/viewer', {
-          state: {
-            title: item.name,
-            content: item.content ?? '',
-          },
-        });
-      }
+    if (item.type === 'folder') {
+      setCurrentDirectory(joinDirectory(item.directory, item.name));
+      return;
     }
+
+    navigate('/viewer', { state: { noteId: item.id } });
   };
 
   const goUpOneLevel = () => {
-    if (currentPath === rootPath) {
-      return;
-    }
-    const segments = currentPath.split('/');
-    segments.pop();
-    setCurrentPath(segments.join('/') || rootPath);
+    if (!userRoot || !currentDirectory || atRoot) return;
+    const parent = parentDirectory(currentDirectory);
+    setCurrentDirectory(parent && parent.length >= userRoot.length ? parent : userRoot);
   };
 
-  const handleNewFolder = () => {
-    const existingNames = new Set(
-      getChildren(items, currentPath)
-        .filter((item) => item.type === 'folder')
-        .map((item) => item.name.toLowerCase()),
-    );
-    let candidate = 'Untitled Folder';
-    let suffix = 1;
-    while (existingNames.has(candidate.toLowerCase())) {
-      suffix += 1;
-      candidate = `Untitled Folder ${suffix}`;
-    }
-
-    const newFolder: LibraryItem = {
-      id: crypto.randomUUID(),
-      name: candidate,
-      type: 'folder',
-      parentPath: currentPath,
-      updatedAt: new Date().toISOString(),
-    };
-    setItems((prev) => [...prev, newFolder]);
-    setShowNewMenu(false);
-  };
-
-  const handleDelete = () => {
-    if (selectedItems.size === 0) {
-      return;
-    }
-    const removeIds = new Set<string>(selectedItems);
-
-    for (const item of items) {
-      if (item.type !== 'folder' || !selectedItems.has(item.id)) {
-        continue;
+  const handleNewFolder = async () => {
+    if (!userRoot || !currentDirectory) return;
+    setLoading(true);
+    setError('');
+    try {
+      const existingFolders = items.filter((i) => i.type === 'folder').map((i) => i.name.toLowerCase());
+      let candidate = 'Untitled Folder';
+      let suffix = 1;
+      while (existingFolders.includes(candidate.toLowerCase())) {
+        suffix += 1;
+        candidate = `Untitled Folder ${suffix}`;
       }
-      const folderPath = getFolderPath(item);
-      const descendants = collectDescendantIds(items, folderPath);
-      descendants.forEach((id) => removeIds.add(id));
-    }
 
-    setItems((prev) => prev.filter((item) => !removeIds.has(item.id)));
-    setSelectedItems(new Set());
+      await createFolder(candidate, currentDirectory);
+      setShowNewMenu(false);
+      await loadItems();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create folder');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGenerateSummary = () => {
+  const handleDelete = async () => {
+    if (selectedItems.size === 0) return;
+    setLoading(true);
+    setError('');
+    try {
+      await deleteItems([...selectedItems]);
+      setSelectedItems(new Set());
+      await loadItems();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    if (!userRoot || selectedItems.size === 0) return;
+    setLoading(true);
+    setError('');
+
     const selected = items.filter((item) => selectedItems.has(item.id));
-    if (selected.length === 0) {
-      return;
+    const noteIds = selected.filter((item) => item.type === 'note').map((item) => item.id);
+    const folderIds = selected.filter((item) => item.type === 'folder').map((item) => item.id);
+
+    try {
+      const titleSeed = `AI Summary ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+      const title = titleSeed.length > 160 ? titleSeed.slice(0, 160) : titleSeed;
+
+      const result = await summarizeSelection({
+        noteIds,
+        folderIds,
+        outputDirectory: userRoot,
+        title,
+      });
+
+      setCurrentDirectory(userRoot);
+      setSelectedItems(new Set());
+      setSelectionMode(false);
+      navigate('/viewer', { state: { noteId: result.note.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } finally {
+      setLoading(false);
     }
-
-    const lectureFiles: LibraryItem[] = [];
-    const lectureIds = new Set<string>();
-
-    for (const item of selected) {
-      if (item.type === 'file' && item.fileKind === 'lecture') {
-        lectureFiles.push(item);
-        lectureIds.add(item.id);
-        continue;
-      }
-
-      if (item.type === 'folder') {
-        const descendants = collectDescendantIds(items, getFolderPath(item));
-        for (const candidate of items) {
-          if (
-            descendants.has(candidate.id) &&
-            candidate.type === 'file' &&
-            candidate.fileKind === 'lecture' &&
-            !lectureIds.has(candidate.id)
-          ) {
-            lectureFiles.push(candidate);
-            lectureIds.add(candidate.id);
-          }
-        }
-      }
-    }
-
-    if (lectureFiles.length === 0) {
-      window.alert('Select at least one lecture text file or a folder containing lecture files.');
-      return;
-    }
-
-    const summaryText = lectureFiles
-      .map((file) => {
-        const fileSummary = summarizeLectureContent(file.content ?? '');
-        return `- ${file.name}: ${fileSummary || 'No content available.'}`;
-      })
-      .join('\n');
-
-    const summaryName = `AI-Summary-${new Date().toISOString().slice(0, 10)}-${Date.now().toString().slice(-4)}.txt`;
-    const createdAt = new Date().toISOString();
-    const summaryContent = [
-      `AI Summary generated from ${lectureFiles.length} file(s).`,
-      '',
-      'Sources:',
-      ...lectureFiles.map((file) => `- ${file.name}`),
-      '',
-      'Summary:',
-      summaryText,
-    ].join('\n');
-
-    const summaryItem: LibraryItem = {
-      id: crypto.randomUUID(),
-      name: summaryName,
-      type: 'file',
-      parentPath: rootPath,
-      updatedAt: createdAt,
-      fileKind: 'summary',
-      content: summaryContent,
-    };
-
-    setItems((prev) => [...prev, summaryItem]);
-    setCurrentPath(rootPath);
-    setSelectedItems(new Set());
-    setSelectionMode(false);
-
-    navigate('/viewer', {
-      state: {
-        title: summaryItem.name,
-        content: summaryItem.content,
-      },
-    });
   };
 
-  const formatDate = (isoDate: string) => {
+  const formatRelativeDate = (isoDate: string) => {
     const date = new Date(isoDate);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -223,8 +183,11 @@ export function Home() {
     return date.toLocaleDateString();
   };
 
-  const pathSegments = currentPath.split('/');
-  const atRoot = currentPath === rootPath;
+  if (!sessionUser || !userId || !userRoot || !currentDirectory) {
+    return <Navigate to="/" replace />;
+  }
+
+  const pathSegments = pathTitleSegments(currentDirectory, userId);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -232,41 +195,42 @@ export function Home() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <img
-                src={logo}
-                alt="ClassroomCompanion"
-                className="h-10 w-10 rounded-md"
-              />
-              <div className="relative" ref={newMenuRef}>
+              <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 rounded-md" />
+              <div className="relative">
                 <button
                   onClick={() => setShowNewMenu(!showNewMenu)}
-                  className="px-4 py-2 text-white rounded-lg transition-colors"
+                  disabled={loading}
+                  className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
                   style={{ backgroundColor: 'var(--brand)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
+                  onMouseEnter={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                  }
+                  onMouseLeave={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                  }
                 >
                   + New
                 </button>
-              {showNewMenu && (
-                <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-56 z-10">
-                  <button
-                    onClick={() => {
-                      navigate('/recording');
-                      setShowNewMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
-                  >
-                    Start New Recording
-                  </button>
-                  <button
-                    onClick={handleNewFolder}
-                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
-                  >
-                    Add New Folder
-                  </button>
-                </div>
-              )}
-            </div>
+                {showNewMenu && (
+                  <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-56 z-10">
+                    <button
+                      onClick={() => {
+                        navigate('/recording');
+                        setShowNewMenu(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+                    >
+                      Start New Recording
+                    </button>
+                    <button
+                      onClick={() => void handleNewFolder()}
+                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+                    >
+                      Add New Folder
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="relative flex items-center gap-3">
@@ -281,7 +245,7 @@ export function Home() {
               {showProfileMenu && (
                 <div className="absolute top-full right-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-40 z-10">
                   <button
-                    onClick={() => navigate('/')}
+                    onClick={() => handleLogout()}
                     className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Logout
@@ -344,17 +308,25 @@ export function Home() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {error ? (
+          <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={goUpOneLevel}
-              disabled={atRoot}
+              disabled={atRoot || loading}
               className="px-3 py-2 border border-border rounded-lg disabled:opacity-50"
             >
               Back
             </button>
             <h1 className="text-2xl">{pathSegments.join(' / ')}</h1>
+            {loading ? <span className="text-sm text-muted-foreground">Loading…</span> : null}
           </div>
+
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -370,25 +342,31 @@ export function Home() {
         </div>
 
         <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Generate AI Summary:</span>{' '}
-          Turn on Select mode, choose lecture files and/or folders, then click Generate. Folder selection is recursive,
-          and the generated summary is saved to the Home root directory.
+          <span className="font-medium text-foreground">Generate AI Summary:</span> Turn on Select mode, choose notes
+          and/or folders (folders include everything inside recursively), then click Generate. The generated summary note
+          is saved to Home and opens in Viewer.
         </div>
 
         {selectionMode && selectedItems.size > 0 && (
           <div className="mb-6 flex items-center gap-3">
             <button
-              onClick={handleGenerateSummary}
-              className="px-4 py-2 text-white rounded-lg transition-colors"
+              onClick={() => void handleGenerateSummary()}
+              disabled={loading}
+              className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
+              onMouseEnter={(e) =>
+                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+              }
+              onMouseLeave={(e) =>
+                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+              }
             >
               Generate AI Summary
             </button>
             <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90"
+              onClick={() => void handleDelete()}
+              disabled={loading}
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 disabled:opacity-50"
             >
               Delete
             </button>
@@ -396,14 +374,24 @@ export function Home() {
         )}
 
         <div className="grid grid-cols-4 gap-4">
-          {filteredItems.map((item) => (
+          {items.map((item) => (
             <div
               key={item.id}
+              role="button"
+              tabIndex={0}
               onClick={() => handleItemClick(item)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleItemClick(item);
+                }
+              }}
               className={`p-4 bg-card border border-border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
                 selectedItems.has(item.id) ? 'ring-2' : ''
               }`}
-              style={selectedItems.has(item.id) ? { '--tw-ring-color': 'var(--brand)' } as React.CSSProperties : {}}
+              style={
+                selectedItems.has(item.id) ? ({ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties) : {}
+              }
             >
               <div className="flex items-start gap-3">
                 {selectionMode && (
@@ -411,24 +399,26 @@ export function Home() {
                     type="checkbox"
                     checked={selectedItems.has(item.id)}
                     onChange={() => {}}
-                    className="mt-1"
+                    className="mt-1 pointer-events-none"
                   />
                 )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-2xl">
-                      {item.type === 'folder' ? '📁' : item.fileKind === 'summary' ? '🧠' : '📄'}
+                      {item.type === 'folder'
+                        ? '📁'
+                        : item.noteSourceType === 'generated_summary'
+                          ? '🧠'
+                          : '📄'}
                     </span>
                     <h3 className="text-sm">{item.name}</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(item.updatedAt)}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{formatRelativeDate(item.lastEditedDate)}</p>
                 </div>
               </div>
             </div>
           ))}
-          {filteredItems.length === 0 && (
+          {!loading && items.length === 0 && (
             <div className="col-span-4 text-center text-muted-foreground py-10 border border-dashed border-border rounded-lg">
               No files or folders in this location.
             </div>

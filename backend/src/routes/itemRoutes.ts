@@ -26,6 +26,9 @@ const toItemResponse = (item: Item) => ({
   directory: item.directoryPath,
   createdDate: item.createdAt.toISOString(),
   lastEditedDate: item.updatedAt.toISOString(),
+  ...(item.type === "note"
+    ? { noteSourceType: item.noteSourceType ?? "recording" }
+    : {}),
 });
 
 export const createItemRoutes = (repo: Repository): Router => {

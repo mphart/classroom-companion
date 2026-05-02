@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import logo from '@/assets/corner-logo.svg';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 interface Item {
   id: string;
@@ -86,15 +87,15 @@ export function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="border-b bg-white">
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <img
                 src={logo}
                 alt="ClassroomCompanion"
-                className="h-12 w-auto"
+                className="h-10 w-10 rounded-md"
               />
               <div className="relative">
                 <button
@@ -107,19 +108,19 @@ export function Home() {
                   + New
                 </button>
               {showNewMenu && (
-                <div className="absolute top-full left-0 mt-2 bg-white border rounded-lg shadow-lg py-2 w-56 z-10">
+                <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-56 z-10">
                   <button
                     onClick={() => {
                       navigate('/recording');
                       setShowNewMenu(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Start New Recording
                   </button>
                   <button
                     onClick={handleNewFolder}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Add New Folder
                   </button>
@@ -128,7 +129,8 @@ export function Home() {
             </div>
             </div>
 
-            <div className="relative">
+            <div className="relative flex items-center gap-3">
+              <ThemeToggle />
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="w-10 h-10 rounded-full text-white flex items-center justify-center"
@@ -137,10 +139,10 @@ export function Home() {
                 U
               </button>
               {showProfileMenu && (
-                <div className="absolute top-full right-0 mt-2 bg-white border rounded-lg shadow-lg py-2 w-40 z-10">
+                <div className="absolute top-full right-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-40 z-10">
                   <button
                     onClick={() => navigate('/')}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Logout
                   </button>
@@ -155,24 +157,24 @@ export function Home() {
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="flex-1 px-4 py-2 border border-border bg-background rounded-lg focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             />
             <div className="relative">
               <button
                 onClick={() => setShowSortMenu(!showSortMenu)}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
               >
                 Sort
               </button>
               {showSortMenu && (
-                <div className="absolute top-full right-0 mt-2 bg-white border rounded-lg shadow-lg py-2 w-48 z-10">
+                <div className="absolute top-full right-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-48 z-10">
                   <button
                     onClick={() => {
                       setSortBy('name');
                       setShowSortMenu(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Name
                   </button>
@@ -181,7 +183,7 @@ export function Home() {
                       setSortBy('lastEdited');
                       setShowSortMenu(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Last Edited
                   </button>
@@ -190,7 +192,7 @@ export function Home() {
                       setSortBy('created');
                       setShowSortMenu(false);
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                   >
                     Creation Date
                   </button>
@@ -231,12 +233,12 @@ export function Home() {
             </button>
             <button
               onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90"
             >
               Delete
             </button>
             {selectedItems.size === 1 && (
-              <button className="px-4 py-2 border rounded-lg hover:bg-gray-50">
+              <button className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground">
                 Rename
               </button>
             )}
@@ -248,7 +250,7 @@ export function Home() {
             <div
               key={item.id}
               onClick={() => handleItemClick(item)}
-              className={`p-4 bg-white border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
+              className={`p-4 bg-card border border-border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
                 selectedItems.has(item.id) ? 'ring-2' : ''
               }`}
               style={selectedItems.has(item.id) ? { '--tw-ring-color': 'var(--brand)' } as React.CSSProperties : {}}
@@ -269,7 +271,7 @@ export function Home() {
                     </span>
                     <h3 className="text-sm">{item.name}</h3>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {formatDate(item.lastEdited)}
                   </p>
                 </div>

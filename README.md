@@ -1,29 +1,53 @@
-# classroom-companion
+# Classroom Companion
 
+Classroom Companion is a web app for recording lectures, organizing sessions by course, and viewing generated study outputs (summary, transcript, key terms, and study questions).
 
+## Repository structure
+
+- `frontend/` - React + Vite client application
+- `docs/` - project and design documentation
 
 ## Getting started
 
+### Prerequisites
 
+- Node.js 18+ (Node 20 recommended)
+- npm 9+
 
-## Test and Deploy
+### Install dependencies
 
+From the repository root:
 
+```bash
+npm --prefix frontend install
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Or:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+cd frontend
+npm install
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Run the frontend (dev)
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+From the repository root:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+npm --prefix frontend run dev
+```
+
+Or from `frontend/`:
+
+```bash
+npm run dev
+```
+
+## Build
+
+```bash
+npm --prefix frontend run build
+```
 
 ### Generate AI Summary button
 - On the Home page, enable Selection Mode and select lecture files and/or folders.
@@ -32,18 +56,15 @@ Use examples liberally, and show the expected output if you can. It's helpful to
 - Generated summaries are saved to the Home/root directory and open in the Viewer page automatically.
 
 ## Roadmap
-See docs/design-doc.md for details
 
-## Contributing
-No contributions or pull requests will be accepted.
+See `docs/design-doc.md` for planned work and design notes.
 
-## Authors and acknowledgment
-Mason Hart (mphart)
-Tyler Mestery (tmestery)
-Robin Lin ()
+## Authors
+
+- Mason Hart (`mphart`)
+- Tyler Mestery (`tmestery`)
+- Robin Lin
 
 ## License
-See the MIT License
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT

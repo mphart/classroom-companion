@@ -21,6 +21,15 @@ Default server port is `4000`.
 - `DB_NAME=classroom_companion`
 - **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`. Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
 - **`GEMINI_MODEL`** (optional): Defaults to `gemini-flash-latest` (matches `v1beta/models/gemini-flash-latest`). Override if your project’s quota works better on another model (e.g. `gemini-1.5-flash`).
+- **`DEEPGRAM_API_KEY`**: Required for **`/transcription/stream`** WebSocket realtime STT.
+
+Optional transcription tuning:
+
+- `DG_MODEL=nova-2`
+- `DG_ENDPOINTING_MS=300`
+- `DEEPGRAM_WS_HOST=wss://api.deepgram.com`
+
+Frontend: **`VITE_API_URL=http://localhost:4000`** for local REST + WS to the API port. For Docker+Nginx same-origin bundles, omit it so the SPA uses **`ws(s)`** with **`window.location.host`** and Nginx proxies **`/transcription/stream`**. Override with **`VITE_WS_URL`** if needed.
 
 ## Database
 

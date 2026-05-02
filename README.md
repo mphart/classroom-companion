@@ -48,13 +48,14 @@ Copy **[`.env.example`](.env.example)** to `.env` and fill in secrets. Compose r
 | `WEB_PORT` | `8080` | Host port for the web UI |
 | `GEMINI_API_KEY` | _(empty)_ | **Required** for Generate AI Summary / single-note summarize ([Google AI Studio](https://aistudio.google.com/apikey)) |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Override if quotas differ (e.g. `gemini-1.5-flash`) |
-| `DEEPGRAM_API_KEY` | _(empty)_ | **Required** for live **Recording** transcription ([Deepgram](https://deepgram.com)) |
+| `DEEPGRAM_API_KEY` | _(empty)_ | **Required** for **English** live recording STT ([Deepgram](https://deepgram.com)) |
+| `GLADIO_API_KEY` | _(empty)_ | **Required** for **non‑English** recording languages — [Gladia](https://gladia.io) live translation into the selected language (alias: `GLADIA_API_KEY`) |
 
 Example:
 
 ```bash
 cp .env.example .env
-# Edit .env: set JWT_SECRET, GEMINI_API_KEY, DEEPGRAM_API_KEY (optional if you only use manual transcript)
+# Edit .env: set JWT_SECRET, GEMINI_API_KEY, DEEPGRAM_API_KEY (English STT), GLADIO_API_KEY (other languages)
 docker compose up --build
 ```
 
@@ -79,7 +80,7 @@ npm run dev
 
 API: **http://localhost:4000**
 
-Set at least `JWT_SECRET`, MySQL `DB_*` vars, and **`GEMINI_API_KEY`** for summarization. Use **`DEEPGRAM_API_KEY`** for `/transcription/stream`.
+Set at least `JWT_SECRET`, MySQL `DB_*` vars, and **`GEMINI_API_KEY`** for summarization. For **`/transcription/stream`**, set **`DEEPGRAM_API_KEY`** when using **English** and **`GLADIO_API_KEY`** when using other lecture languages (Gladia).
 
 ### Frontend
 

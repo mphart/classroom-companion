@@ -10,6 +10,7 @@ const selectionSchema = z.object({
   folderIds: z.array(z.number().int().positive()).default([]),
   outputDirectory: z.string().trim().min(1),
   title: z.string().trim().min(1).max(180).default("Generated Summary"),
+  outputLanguage: z.string().trim().min(1).max(80).optional(),
 });
 
 export const createAiRoutes = (repo: Repository): Router => {
@@ -21,7 +22,7 @@ export const createAiRoutes = (repo: Repository): Router => {
       const noteId = z.coerce.number().int().positive().parse(req.params.noteId);
       const found = await repo.getNoteById({ userId: req.authUserId!, itemId: noteId });
       if (!found) return res.status(404).json({ error: "Note not found." });
-      const summary = await summarizeSourceTexts([found.note.rawText]);
+      const summary = await summarizeSourceTexts([found.note.rawText], { outputLanguage: found.note.language });
       const updated = await repo.updateNoteSummary({ userId: req.authUserId!, itemId: noteId, summary });
       return res.json({ note: mapNoteResponse(updated) });
     } catch (error) {
@@ -38,7 +39,7 @@ export const createAiRoutes = (repo: Repository): Router => {
         folderIds: body.folderIds,
       });
       if (texts.length === 0) return res.status(400).json({ error: "No source notes found for selected inputs." });
-      const summary = await summarizeSourceTexts(texts);
+      const summary = await summarizeSourceTexts(texts, { outputLanguage: body.outputLanguage });
       const created = await repo.createNote({
         userId: req.authUserId!,
         title: body.title,

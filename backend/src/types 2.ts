@@ -47,8 +47,6 @@ export interface CreateNoteInput {
   title: string;
   directoryPath: string;
   rawText: string;
-  /** When set (e.g. Gemini output), persisted to `notes.ai_summary` alongside `raw_text`. */
-  aiSummary?: string | null;
   language: string;
   durationSeconds: number;
   sourceType?: "recording" | "generated_summary";

@@ -19,8 +19,6 @@ Default server port is `4000`.
 - `DB_USER=root`
 - `DB_PASSWORD=`
 - `DB_NAME=classroom_companion`
-- **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`. Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
-- **`GEMINI_MODEL`** (optional): Defaults to `gemini-flash-latest` (matches `v1beta/models/gemini-flash-latest`). Override if your project’s quota works better on another model (e.g. `gemini-1.5-flash`).
 
 ## Database
 

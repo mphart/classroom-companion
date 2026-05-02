@@ -90,6 +90,10 @@ export async function apiDelete(path: string, body: unknown): Promise<unknown> {
   return fetchJson('DELETE', path, body);
 }
 
+export async function apiPatch(path: string, body: unknown): Promise<unknown> {
+  return fetchJson('PATCH', path, body);
+}
+
 export async function listItems(params: {
   directory: string;
   q?: string;
@@ -106,6 +110,11 @@ export async function listItems(params: {
 
 export async function createFolder(name: string, directory: string): Promise<ListedItemDto> {
   const payload = (await apiPost('/folders', { name, directory })) as { item: ListedItemDto };
+  return payload.item;
+}
+
+export async function renameItem(itemId: number, newName: string): Promise<ListedItemDto> {
+  const payload = (await apiPatch(`/items/${itemId}/rename`, { newName })) as { item: ListedItemDto };
   return payload.item;
 }
 

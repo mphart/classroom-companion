@@ -49,6 +49,46 @@ describe("MVP backend routes", () => {
     expect(list.body.items[0].type).toBe("note");
   });
 
+  it("renames a folder and keeps nested notes under the new path", async () => {
+    const { app, token } = await bootstrap();
+    const folderRes = await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Physics",
+      directory: "1/",
+    });
+    expect(folderRes.status).toBe(201);
+    const folderId = folderRes.body.item.id as number;
+
+    await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Lecture-A",
+      directory: "1/Physics/",
+      rawText: "Intro material.",
+      language: "English",
+      durationSeconds: 60,
+    });
+
+    const rename = await request(app)
+      .patch(`/items/${folderId}/rename`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ newName: "PhysicsRenamed" });
+    expect(rename.status).toBe(200);
+    expect(rename.body.item.name).toBe("PhysicsRenamed");
+
+    const after = await request(app)
+      .get("/items")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ directory: "1/PhysicsRenamed/" });
+    expect(after.status).toBe(200);
+    expect(after.body.items).toHaveLength(1);
+    expect(after.body.items[0].name).toBe("Lecture-A");
+
+    const oldPath = await request(app)
+      .get("/items")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ directory: "1/Physics/" });
+    expect(oldPath.status).toBe(200);
+    expect(oldPath.body.items).toHaveLength(0);
+  });
+
   it("summarizes one note and generates selection summary", async () => {
     const { app, token } = await bootstrap();
     await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({

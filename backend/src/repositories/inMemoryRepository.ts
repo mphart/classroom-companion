@@ -80,6 +80,20 @@ export class InMemoryRepository implements Repository {
   async renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null> {
     const item = this.items.find((i) => i.id === input.itemId && i.userId === input.userId);
     if (!item) return null;
+    if (item.type === "folder") {
+      const oldPrefix = this.folderPrefix(item);
+      const newPrefix = `${normalizePath(item.directoryPath)}${input.newName}/`;
+      if (oldPrefix !== newPrefix) {
+        for (const candidate of this.items) {
+          if (candidate.userId !== input.userId || candidate.id === item.id) continue;
+          const d = normalizePath(candidate.directoryPath);
+          if (d.startsWith(oldPrefix)) {
+            candidate.directoryPath = newPrefix + d.slice(oldPrefix.length);
+            candidate.updatedAt = new Date();
+          }
+        }
+      }
+    }
     item.name = input.newName;
     item.updatedAt = new Date();
     return item;

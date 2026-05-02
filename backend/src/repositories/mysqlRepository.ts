@@ -152,6 +152,27 @@ export class MySqlRepository implements Repository {
   }
 
   async renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null> {
+    const [targetRows] = await this.pool.execute<ItemRow[]>(
+      "SELECT * FROM items WHERE id = ? AND user_id = ? LIMIT 1",
+      [input.itemId, input.userId],
+    );
+    if (targetRows.length === 0) return null;
+    const row = targetRows[0];
+
+    if (row.type === "folder") {
+      const oldPrefix = `${normalizePath(row.directory_path)}${row.name}/`;
+      const newPrefix = `${normalizePath(row.directory_path)}${input.newName}/`;
+      if (oldPrefix !== newPrefix) {
+        await this.pool.execute(
+          `UPDATE items SET
+            directory_path = CONCAT(?, SUBSTRING(directory_path, CHAR_LENGTH(?) + 1)),
+            updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = ? AND id != ? AND directory_path LIKE CONCAT(?, '%')`,
+          [newPrefix, oldPrefix, input.userId, input.itemId, oldPrefix],
+        );
+      }
+    }
+
     const [updateResult] = await this.pool.execute(
       "UPDATE items SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
       [input.newName, input.itemId, input.userId],

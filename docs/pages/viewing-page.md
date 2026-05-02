@@ -14,7 +14,7 @@ The Viewer Page is a read-only document viewing environment. It is reached from 
 The user finishes a recording session and taps **Finish**. All files (AI summary, transcript, key terms, study questions) have been processed and saved to MongoDB before this page loads. The user arrives at the Viewer Page automatically.
 
 ### Entry Point B — Home Page Selection Flow
-The user is on the Home page, selects one or more files or directories from their saved sessions, and chooses to generate a new summary or simply open a file. They are then routed to the Viewer Page. What they see depends on what they selected.
+The user is on the Home page, selects one or more files or directories from their saved sessions, and clicks **Generate AI Summary** (or simply opens a file). They are then routed to the Viewer Page. What they see depends on what they selected.
 
 ---
 
@@ -72,6 +72,7 @@ The sidebar lists each selected file individually. Files may be grouped by their
 The sidebar shows:
 - **Generated Summary** at the top *(auto-loaded on arrival)* — clearly labeled as newly generated, not a stored recording file
 - Below it, the source files or directories that were used to generate it, listed for reference. These are also viewable but secondary.
+- The generated summary file is saved in the Home/root directory before this page opens.
 
 The sidebar header in Entry Point B shows context-appropriate text — e.g., "Selected Files" or "Generated Summary" — rather than a specific recording session name.
 

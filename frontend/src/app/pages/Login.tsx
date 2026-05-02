@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function Login() {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex bg-background text-foreground">
       <div className="w-1/2 flex items-center justify-center p-12" style={{ backgroundColor: 'var(--brand-deep)' }}>
         <div className="text-center">
           <img
@@ -37,14 +38,17 @@ export function Login() {
         </div>
       </div>
 
-      <div className="w-1/2 flex items-center justify-center bg-gray-50">
+      <div className="w-1/2 relative flex items-center justify-center bg-background">
+        <div className="absolute right-6 top-6">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md px-8">
           <h2 className="text-3xl mb-2">Welcome back.</h2>
-          <p className="text-gray-600 mb-8">Sign in to your account.</p>
+          <p className="text-muted-foreground mb-8">Sign in to your account.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm mb-2 text-gray-700">
+              <label htmlFor="username" className="block text-sm mb-2 text-muted-foreground">
                 Username
               </label>
               <input
@@ -53,14 +57,14 @@ export function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border ${
-                  error ? 'border-red-500' : 'border-gray-300'
-                } focus:outline-none focus:ring-2`}
+                  error ? 'border-red-500' : 'border-border'
+                } bg-input-background focus:outline-none focus:ring-2`}
                 style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm mb-2 text-gray-700">
+              <label htmlFor="password" className="block text-sm mb-2 text-muted-foreground">
                 Password
               </label>
               <input
@@ -69,8 +73,8 @@ export function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={`w-full px-4 py-3 rounded-lg border ${
-                  error ? 'border-red-500' : 'border-gray-300'
-                } focus:outline-none focus:ring-2`}
+                  error ? 'border-red-500' : 'border-border'
+                } bg-input-background focus:outline-none focus:ring-2`}
                 style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
               />
             </div>
@@ -94,7 +98,7 @@ export function Login() {
               )}
             </button>
 
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-sm text-muted-foreground">
               Don't have an account?{' '}
               <button
                 type="button"

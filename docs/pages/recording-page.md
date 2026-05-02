@@ -14,8 +14,15 @@ This list should include the following:
 -A dropdown where the user can select which course to save to. At the bottom of this dropdown, the user can choose to create a new course. Clicking this will open up a popup which prompts the user to create a new course, a picture of this popup will be linked in docs/fragment. In short, the popup will have a field to input the new name for the course.
 -A field that allows the user to select which language to display. This field can only be changed before the user clicks the start recording button for the first time and starts generating text. The default should be English.
 -A button at the very bottom that also takes the user to the home page.
+-A save-location control that determines where lecture output files are written:
+  - Home root directory
+  - Selected course folder
 Recording Section
-The site should have a recording section that displays the text live based on the audio recording. First, the user should configure the settings. Disable the Start button until a Course is selected, or prompt on Stop if no course was chosen. Next, upon the user clicking Start the site should request to record audio. Next, the live audio recording should be sent to the backend via websocket. The backend should use an api to translate the speech into the selected language. The backend then sends this back to the frontend. New text appends to the bottom, and the view auto-scrolls down to follow it. At the bottom, there should be a start and stop recording button, and there should be a timer that indicates how long the recording has occurred for. Upon pressing stop, the recording should be saved and the user should be brought over to the homepage. 
+The site should have a recording section that displays the text live based on the audio recording. First, the user should configure the settings. Disable the Start button until a Course is selected, or prompt on Stop if no course was chosen. Next, upon the user clicking Start the site should request to record audio. Next, the live audio recording should be sent to the backend via websocket. The backend should use an api to translate the speech into the selected language. The backend then sends this back to the frontend. New text appends to the bottom, and the view auto-scrolls down to follow it. At the bottom, there should be a start and stop recording button, and there should be a timer that indicates how long the recording has occurred for. Upon pressing stop, the recording should be saved as a lecture text file (notes + transcript + metadata) in the selected save location and the user should be brought over to the homepage.
+
+Generate button integration:
+- Files created from recording are the source inputs used by the Home page **Generate AI Summary** button.
+- If the user later selects those lecture files (or their parent folder), they are included in generated summaries automatically.
 
 More Notes:
 Page Overview

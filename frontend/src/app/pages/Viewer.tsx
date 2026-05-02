@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 interface Document {
   id: string;
@@ -12,13 +13,14 @@ interface Document {
 
 export function Viewer() {
   const navigate = useNavigate();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
   const [selectedDocId, setSelectedDocId] = useState('1');
+  const openedFile = location.state as { title?: string; content?: string } | null;
 
   const sessionName = 'Lecture-05-02';
   const sessionDate = 'May 2, 2026 • 2:15 PM';
 
-  const documents: Document[] = [
+  const defaultDocuments: Document[] = [
     {
       id: '1',
       title: 'AI Summary',
@@ -135,19 +137,28 @@ A demonstration that light and matter can display characteristics of both waves 
     },
   ];
 
-  const selectedDoc = documents.find((doc) => doc.id === selectedDocId);
+  const documents: Document[] = openedFile?.title
+    ? [
+        {
+          id: 'opened-file',
+          title: openedFile.title,
+          type: 'generated_summary',
+          content: openedFile.content ?? '',
+          generated: true,
+        },
+      ]
+    : defaultDocuments;
+
+  const activeDocId = documents.some((doc) => doc.id === selectedDocId) ? selectedDocId : documents[0]?.id ?? '';
+  const selectedDoc = documents.find((doc) => doc.id === activeDocId);
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
-      <div
-        className={`bg-white border-r transition-all duration-300 ${
-          sidebarCollapsed ? 'w-0' : 'w-80'
-        } overflow-hidden`}
-      >
+    <div className="min-h-screen bg-background text-foreground flex">
+      <div className="w-80 shrink-0 bg-card border-r border-border">
         <div className="p-6">
           <div className="mb-6">
             <h2 className="text-lg mb-1">{sessionName}</h2>
-            <p className="text-sm text-gray-500">{sessionDate}</p>
+            <p className="text-sm text-muted-foreground">{sessionDate}</p>
           </div>
 
           <div className="space-y-2">
@@ -156,11 +167,11 @@ A demonstration that light and matter can display characteristics of both waves 
                 key={doc.id}
                 onClick={() => setSelectedDocId(doc.id)}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  selectedDocId === doc.id
+                  activeDocId === doc.id
                     ? 'border'
-                    : 'hover:bg-gray-50'
+                    : 'hover:bg-accent hover:text-accent-foreground'
                 }`}
-                style={selectedDocId === doc.id ? {
+                style={activeDocId === doc.id ? {
                   backgroundColor: 'var(--brand-soft-bg)',
                   color: 'var(--brand-deep)',
                   borderColor: 'var(--brand-soft-border)'
@@ -174,31 +185,28 @@ A demonstration that light and matter can display characteristics of both waves 
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/home')}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
             >
               ← Back to Home
             </button>
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-            >
-              {sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}
-            </button>
           </div>
-          <img
-            src={logo}
-            alt="ClassroomCompanion"
-            className="h-10 w-auto"
-          />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <img
+              src={logo}
+              alt="ClassroomCompanion"
+              className="h-10 w-auto"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-3xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm p-12">
+            <div className="bg-card border border-border rounded-lg shadow-sm p-12">
               {selectedDoc ? (
                 <div className="prose prose-sm max-w-none">
                   {selectedDoc.content.split('\n').map((line, index) => {
@@ -241,7 +249,7 @@ A demonstration that light and matter can display characteristics of both waves 
                   })}
                 </div>
               ) : (
-                <p className="text-gray-400 text-center">
+                <p className="text-muted-foreground text-center">
                   Select a document to view
                 </p>
               )}

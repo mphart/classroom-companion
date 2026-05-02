@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
+import {
+  buildPath,
+  ensureFolder,
+  getRootPath,
+  LibraryItem,
+  loadLibraryItems,
+  saveLibraryItems,
+} from '@/app/lib/library';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -19,6 +28,7 @@ export function ActiveRecording() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
+  const [saveLocation, setSaveLocation] = useState<'home' | 'course'>('home');
 
   const courses = ['Physics', 'Mathematics', 'Chemistry', 'Biology'];
 
@@ -58,7 +68,7 @@ export function ActiveRecording() {
   };
 
   const handleStartRecording = () => {
-    if (!selectedCourse) {
+    if (saveLocation === 'course' && !selectedCourse) {
       alert('Please select a course first');
       return;
     }
@@ -73,7 +83,43 @@ export function ActiveRecording() {
 
   const handleStopRecording = () => {
     setIsRecording(false);
-    navigate('/viewer');
+    const allItems = loadLibraryItems();
+    const withCourseFolder =
+      saveLocation === 'course' && selectedCourse ? ensureFolder(allItems, selectedCourse, getRootPath()) : allItems;
+    const parentPath =
+      saveLocation === 'course' && selectedCourse ? buildPath(getRootPath(), selectedCourse) : getRootPath();
+    const timestamp = new Date().toISOString();
+
+    const cleanedNotes = notes
+      .map((note) => note.trim())
+      .filter(Boolean)
+      .map((note) => `- ${note}`)
+      .join('\n');
+
+    const lectureContent = [
+      `Lecture: ${lectureName}`,
+      `Course: ${selectedCourse}`,
+      `Language: ${language}`,
+      '',
+      'Notes:',
+      cleanedNotes || '- No notes were captured.',
+      '',
+      'Transcript:',
+      transcript || 'No transcript available.',
+    ].join('\n');
+
+    const newLectureFile: LibraryItem = {
+      id: crypto.randomUUID(),
+      name: `${lectureName}.txt`,
+      type: 'file',
+      parentPath,
+      updatedAt: timestamp,
+      fileKind: 'lecture',
+      content: lectureContent,
+    };
+
+    saveLibraryItems([...withCourseFolder, newLectureFile]);
+    navigate('/home');
   };
 
   const simulateTranscription = () => {
@@ -86,8 +132,7 @@ export function ActiveRecording() {
 
     let index = 0;
     const interval = setInterval(() => {
-      if (!isRecording || isPaused) {
-        clearInterval(interval);
+      if (isPaused) {
         return;
       }
 
@@ -110,8 +155,8 @@ export function ActiveRecording() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <div className="w-80 bg-white border-r p-6 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex">
+      <div className="w-80 bg-card border-r border-border p-6 flex flex-col">
         <button
           onClick={() => navigate('/home')}
           className="mb-8"
@@ -125,7 +170,7 @@ export function ActiveRecording() {
 
         <div className="flex-1 space-y-6">
           <div>
-            <label className="block text-sm mb-2 text-gray-700">
+            <label className="block text-sm mb-2 text-muted-foreground">
               Lecture Name
             </label>
             <input
@@ -133,13 +178,13 @@ export function ActiveRecording() {
               value={lectureName}
               onChange={(e) => setLectureName(e.target.value)}
               disabled={isRecording}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             />
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-gray-700">
+            <label className="block text-sm mb-2 text-muted-foreground">
               Course
             </label>
             <select
@@ -152,7 +197,7 @@ export function ActiveRecording() {
                 }
               }}
               disabled={isRecording}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
               <option value="">Select a course</option>
@@ -166,14 +211,14 @@ export function ActiveRecording() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-gray-700">
+            <label className="block text-sm mb-2 text-muted-foreground">
               Language
             </label>
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               disabled={isRecording}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
               <option>English</option>
@@ -183,19 +228,38 @@ export function ActiveRecording() {
               <option>Mandarin</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm mb-2 text-muted-foreground">
+              Save Recording Output
+            </label>
+            <select
+              value={saveLocation}
+              onChange={(e) => setSaveLocation(e.target.value as 'home' | 'course')}
+              disabled={isRecording}
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+            >
+              <option value="home">Home root directory</option>
+              <option value="course">Inside selected course folder</option>
+            </select>
+          </div>
         </div>
 
         <button
           onClick={() => navigate('/home')}
-          className="mt-auto w-full py-2 border rounded-lg hover:bg-gray-50"
+          className="mt-auto w-full py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
         >
           Home
         </button>
       </div>
 
       <div className="flex-1 flex flex-col">
-        <div className="bg-white border-b p-6">
-          <h2 className="text-xl mb-4">Enter Notes</h2>
+        <div className="bg-card border-b border-border p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl">Enter Notes</h2>
+            <ThemeToggle />
+          </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {notes.map((note, index) => (
               <div key={index} className="flex items-start gap-2">
@@ -205,7 +269,7 @@ export function ActiveRecording() {
                   value={note}
                   onChange={(e) => handleNoteChange(index, e.target.value)}
                   onKeyDown={(e) => handleNoteKeyDown(index, e)}
-                  className="note-input flex-1 px-3 py-1 border-b border-gray-300 focus:outline-none focus:border-b-2 focus:[border-bottom-color:var(--brand)]"
+                  className="note-input flex-1 px-3 py-1 border-b border-border bg-transparent focus:outline-none focus:border-b-2 focus:[border-bottom-color:var(--brand)]"
                   placeholder="Type a note..."
                 />
               </div>
@@ -215,9 +279,9 @@ export function ActiveRecording() {
 
         <div className="flex-1 p-6 overflow-y-auto">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border p-6 min-h-96">
+            <div className="bg-card rounded-lg shadow-sm border border-border p-6 min-h-96">
               {transcript || (
-                <p className="text-gray-400">
+                <p className="text-muted-foreground">
                   Click Start to begin recording...
                 </p>
               )}
@@ -226,7 +290,7 @@ export function ActiveRecording() {
           </div>
         </div>
 
-        <div className="bg-white border-t p-6">
+        <div className="bg-card border-t border-border p-6">
           <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
             {!isRecording ? (
               <button
@@ -242,7 +306,7 @@ export function ActiveRecording() {
               <>
                 <button
                   onClick={handlePauseRecording}
-                  className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                  className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90"
                 >
                   {isPaused ? 'Resume' : 'Pause'}
                 </button>
@@ -250,7 +314,7 @@ export function ActiveRecording() {
                   onClick={handleStopRecording}
                   className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
-                  Stop
+                  Finish & Exit
                 </button>
                 <div className="ml-4 text-xl">
                   {formatTime(elapsedTime)}
@@ -263,14 +327,14 @@ export function ActiveRecording() {
 
       {showCourseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96">
+          <div className="bg-card border border-border rounded-lg p-6 w-96">
             <h3 className="text-xl mb-4">Create New Course</h3>
             <input
               type="text"
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
               placeholder="Course name"
-              className="w-full px-3 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg mb-4 focus:outline-none focus:ring-2"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
               autoFocus
             />
@@ -289,7 +353,7 @@ export function ActiveRecording() {
                   setShowCourseModal(false);
                   setNewCourseName('');
                 }}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
               >
                 Cancel
               </button>

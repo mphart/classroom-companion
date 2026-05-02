@@ -49,6 +49,12 @@ npm run dev
 npm --prefix frontend run build
 ```
 
+### Generate AI Summary button
+- On the Home page, enable Selection Mode and select lecture files and/or folders.
+- Click **Generate AI Summary** to create a combined summary from selected sources.
+- Folder selection is recursive (lecture files in nested folders are included).
+- Generated summaries are saved to the Home/root directory and open in the Viewer page automatically.
+
 ## Roadmap
 
 See `docs/design-doc.md` for planned work and design notes.

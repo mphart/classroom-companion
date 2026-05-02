@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
+import logo from '@/imports/classroomcompanion_logo_v4.svg';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -116,7 +117,7 @@ export function ActiveRecording() {
           className="mb-8"
         >
           <img
-            src="/src/imports/classroomcompanion_logo_v4.svg"
+            src={logo}
             alt="ClassroomCompanion"
             className="h-16 w-full object-contain"
           />
@@ -133,7 +134,7 @@ export function ActiveRecording() {
               onChange={(e) => setLectureName(e.target.value)}
               disabled={isRecording}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'rgb(92, 201, 122)' } as React.CSSProperties}
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             />
           </div>
 
@@ -152,7 +153,7 @@ export function ActiveRecording() {
               }}
               disabled={isRecording}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'rgb(92, 201, 122)' } as React.CSSProperties}
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
               <option value="">Select a course</option>
               {courses.map((course) => (
@@ -173,7 +174,7 @@ export function ActiveRecording() {
               onChange={(e) => setLanguage(e.target.value)}
               disabled={isRecording}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'rgb(92, 201, 122)' } as React.CSSProperties}
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
               <option>English</option>
               <option>Spanish</option>
@@ -204,7 +205,7 @@ export function ActiveRecording() {
                   value={note}
                   onChange={(e) => handleNoteChange(index, e.target.value)}
                   onKeyDown={(e) => handleNoteKeyDown(index, e)}
-                  className="note-input flex-1 px-3 py-1 border-b focus:outline-none focus:border-blue-500"
+                  className="note-input flex-1 px-3 py-1 border-b border-gray-300 focus:outline-none focus:border-b-2 focus:[border-bottom-color:var(--brand)]"
                   placeholder="Type a note..."
                 />
               </div>
@@ -231,9 +232,9 @@ export function ActiveRecording() {
               <button
                 onClick={handleStartRecording}
                 className="px-8 py-3 text-white rounded-lg transition-colors"
-                style={{ backgroundColor: 'rgb(92, 201, 122)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgb(72, 181, 102)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgb(92, 201, 122)')}
+                style={{ backgroundColor: 'var(--brand)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
               >
                 Start Recording
               </button>
@@ -269,16 +270,17 @@ export function ActiveRecording() {
               value={newCourseName}
               onChange={(e) => setNewCourseName(e.target.value)}
               placeholder="Course name"
-              className="w-full px-3 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
               autoFocus
             />
             <div className="flex gap-3">
               <button
                 onClick={handleCreateCourse}
                 className="flex-1 px-4 py-2 text-white rounded-lg transition-colors"
-                style={{ backgroundColor: 'rgb(92, 201, 122)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgb(72, 181, 102)')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgb(92, 201, 122)')}
+                style={{ backgroundColor: 'var(--brand)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
               >
                 Create
               </button>

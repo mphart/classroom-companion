@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import logo from '@/imports/classroomcompanion_logo_v4.svg';
 
 interface Document {
   id: string;
@@ -160,9 +161,9 @@ A demonstration that light and matter can display characteristics of both waves 
                     : 'hover:bg-gray-50'
                 }`}
                 style={selectedDocId === doc.id ? {
-                  backgroundColor: 'rgba(92, 201, 122, 0.1)',
-                  color: 'rgb(30, 58, 42)',
-                  borderColor: 'rgba(92, 201, 122, 0.3)'
+                  backgroundColor: 'var(--brand-soft-bg)',
+                  color: 'var(--brand-deep)',
+                  borderColor: 'var(--brand-soft-border)'
                 } : {}}
               >
                 {doc.title}
@@ -189,9 +190,9 @@ A demonstration that light and matter can display characteristics of both waves 
             </button>
           </div>
           <img
-            src="/src/imports/classroomcompanion_logo_v4.svg"
+            src={logo}
             alt="ClassroomCompanion"
-            className="h-10"
+            className="h-10 w-auto"
           />
         </div>
 

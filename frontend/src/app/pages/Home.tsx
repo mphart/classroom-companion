@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import logo from '@/imports/classroomcompanion_logo_v4.svg';
 
 interface Item {
   id: string;
@@ -91,17 +92,17 @@ export function Home() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <img
-                src="/src/imports/classroomcompanion_logo_v4.svg"
+                src={logo}
                 alt="ClassroomCompanion"
-                className="h-12"
+                className="h-12 w-auto"
               />
               <div className="relative">
                 <button
                   onClick={() => setShowNewMenu(!showNewMenu)}
                   className="px-4 py-2 text-white rounded-lg transition-colors"
-                  style={{ backgroundColor: 'rgb(92, 201, 122)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgb(72, 181, 102)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgb(92, 201, 122)')}
+                  style={{ backgroundColor: 'var(--brand)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
                 >
                   + New
                 </button>
@@ -125,12 +126,13 @@ export function Home() {
                 </div>
               )}
             </div>
+            </div>
 
             <div className="relative">
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="w-10 h-10 rounded-full text-white flex items-center justify-center"
-                style={{ backgroundColor: 'rgb(92, 201, 122)' }}
+                style={{ backgroundColor: 'var(--brand)' }}
               >
                 U
               </button>
@@ -154,7 +156,7 @@ export function Home() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'rgb(92, 201, 122)' } as React.CSSProperties}
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             />
             <div className="relative">
               <button
@@ -221,9 +223,9 @@ export function Home() {
             <button
               onClick={handleGenerateSummary}
               className="px-4 py-2 text-white rounded-lg transition-colors"
-              style={{ backgroundColor: 'rgb(92, 201, 122)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgb(72, 181, 102)')}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgb(92, 201, 122)')}
+              style={{ backgroundColor: 'var(--brand)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
             >
               Generate Summary
             </button>
@@ -249,7 +251,7 @@ export function Home() {
               className={`p-4 bg-white border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
                 selectedItems.has(item.id) ? 'ring-2' : ''
               }`}
-              style={selectedItems.has(item.id) ? { '--tw-ring-color': 'rgb(92, 201, 122)' } as React.CSSProperties : {}}
+              style={selectedItems.has(item.id) ? { '--tw-ring-color': 'var(--brand)' } as React.CSSProperties : {}}
             >
               <div className="flex items-start gap-3">
                 {selectionMode && (

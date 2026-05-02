@@ -69,3 +69,70 @@ The home page is the main page where users can create folders for classes and st
 - The summary automatically opens in the viewing page.
 
 
+## 🌐 Homepage APIs (MVP)
+
+These APIs support the core functionality of the home page: displaying items, creating folders, managing notes, and performing bulk actions.
+
+---
+
+### 📂 Get Items in Current Directory
+```http
+GET /items?directory=userId/physics/
+
+[
+  {
+    "id": 1,
+    "type": "folder",
+    "name": "Physics",
+    "directory": "userId/",
+    "createdDate": "...",
+    "lastEditedDate": "..."
+  },
+  {
+    "id": 2,
+    "type": "note",
+    "title": "Chapter 3 Lecture",
+    "directory": "userId/physics/",
+    "createdDate": "...",
+    "lastEditedDate": "..."
+  }
+]
+
+
+POST /folders
+
+{
+  "name": "Physics",
+  "directory": "userId/",
+  "createdDate": "2026-05-02T12:00:00Z"
+}
+
+POST /notes
+
+{
+  "title": "Lecture Recording",
+  "directory": "userId/physics/",
+  "originalText": "...",
+  "createdDate": "...",
+  "lastEditedDate": "..."
+}
+
+PUT /items/{itemId}/rename
+
+{
+  "newName": "Chapter 3"
+}
+
+DELETE /items
+
+{
+  "itemIds": [1, 2, 3]
+}
+
+POST /ai/summarize
+
+{
+  "noteIds": [1, 2],
+  "folderIds": [3],
+  "outputDirectory": "userId/physics/"
+}

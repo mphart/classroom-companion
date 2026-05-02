@@ -21,6 +21,7 @@ Default server port is `4000`.
 - `DB_NAME=classroom_companion`
 - **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`. Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
 - **`GEMINI_MODEL`** (optional): Defaults to `gemini-flash-latest` (matches `v1beta/models/gemini-flash-latest`). Override if your project’s quota works better on another model (e.g. `gemini-1.5-flash`).
+- **Summarization behavior**: `/ai/summarize/*` instructs Gemini to extract **instructor / professor teaching** from mixed speech-to-text (student chatter and off-topic lines are de-emphasized). This is prompt-based, not true diarization—quality improves if the mic favors the instructor.
 - **`DEEPGRAM_API_KEY`**: Required for **`/transcription/stream`** WebSocket realtime STT.
 
 Optional transcription tuning:

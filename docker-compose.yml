@@ -22,6 +22,14 @@ services:
       context: .
       dockerfile: docker/Dockerfile.api
     restart: unless-stopped
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -43,7 +51,8 @@ services:
     ports:
       - "${WEB_PORT:-8080}:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   mysql_data:

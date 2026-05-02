@@ -14,7 +14,6 @@ interface Document {
 export function Viewer() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState('1');
   const openedFile = location.state as { title?: string; content?: string } | null;
 
@@ -155,11 +154,7 @@ A demonstration that light and matter can display characteristics of both waves 
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
-      <div
-        className={`bg-card border-r border-border transition-all duration-300 ${
-          sidebarCollapsed ? 'w-0' : 'w-80'
-        } overflow-hidden`}
-      >
+      <div className="w-80 shrink-0 bg-card border-r border-border">
         <div className="p-6">
           <div className="mb-6">
             <h2 className="text-lg mb-1">{sessionName}</h2>
@@ -197,12 +192,6 @@ A demonstration that light and matter can display characteristics of both waves 
               className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
             >
               ← Back to Home
-            </button>
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground"
-            >
-              {sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}
             </button>
           </div>
           <div className="flex items-center gap-3">

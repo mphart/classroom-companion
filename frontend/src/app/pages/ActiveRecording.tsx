@@ -314,7 +314,7 @@ export function ActiveRecording() {
                   onClick={handleStopRecording}
                   className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
-                  Stop
+                  Finish & Exit
                 </button>
                 <div className="ml-4 text-xl">
                   {formatTime(elapsedTime)}

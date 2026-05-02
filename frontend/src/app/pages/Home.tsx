@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/assets/corner-logo.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
@@ -25,10 +25,27 @@ export function Home() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
   const [items, setItems] = useState<LibraryItem[]>(() => loadLibraryItems());
+  const newMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     saveLibraryItems(items);
   }, [items]);
+
+  useEffect(() => {
+    if (!showNewMenu) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const targetNode = event.target as Node;
+      if (newMenuRef.current && !newMenuRef.current.contains(targetNode)) {
+        setShowNewMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showNewMenu]);
 
   const visibleItems = useMemo(() => getChildren(items, currentPath), [items, currentPath]);
 
@@ -220,7 +237,7 @@ export function Home() {
                 alt="ClassroomCompanion"
                 className="h-10 w-10 rounded-md"
               />
-              <div className="relative">
+              <div className="relative" ref={newMenuRef}>
                 <button
                   onClick={() => setShowNewMenu(!showNewMenu)}
                   className="px-4 py-2 text-white rounded-lg transition-colors"

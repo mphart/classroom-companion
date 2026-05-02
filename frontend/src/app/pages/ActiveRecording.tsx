@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
+import {
+  buildPath,
+  ensureFolder,
+  getRootPath,
+  LibraryItem,
+  loadLibraryItems,
+  saveLibraryItems,
+} from '@/app/lib/library';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -20,6 +28,7 @@ export function ActiveRecording() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
+  const [saveLocation, setSaveLocation] = useState<'home' | 'course'>('home');
 
   const courses = ['Physics', 'Mathematics', 'Chemistry', 'Biology'];
 
@@ -59,7 +68,7 @@ export function ActiveRecording() {
   };
 
   const handleStartRecording = () => {
-    if (!selectedCourse) {
+    if (saveLocation === 'course' && !selectedCourse) {
       alert('Please select a course first');
       return;
     }
@@ -74,7 +83,43 @@ export function ActiveRecording() {
 
   const handleStopRecording = () => {
     setIsRecording(false);
-    navigate('/viewer');
+    const allItems = loadLibraryItems();
+    const withCourseFolder =
+      saveLocation === 'course' && selectedCourse ? ensureFolder(allItems, selectedCourse, getRootPath()) : allItems;
+    const parentPath =
+      saveLocation === 'course' && selectedCourse ? buildPath(getRootPath(), selectedCourse) : getRootPath();
+    const timestamp = new Date().toISOString();
+
+    const cleanedNotes = notes
+      .map((note) => note.trim())
+      .filter(Boolean)
+      .map((note) => `- ${note}`)
+      .join('\n');
+
+    const lectureContent = [
+      `Lecture: ${lectureName}`,
+      `Course: ${selectedCourse}`,
+      `Language: ${language}`,
+      '',
+      'Notes:',
+      cleanedNotes || '- No notes were captured.',
+      '',
+      'Transcript:',
+      transcript || 'No transcript available.',
+    ].join('\n');
+
+    const newLectureFile: LibraryItem = {
+      id: crypto.randomUUID(),
+      name: `${lectureName}.txt`,
+      type: 'file',
+      parentPath,
+      updatedAt: timestamp,
+      fileKind: 'lecture',
+      content: lectureContent,
+    };
+
+    saveLibraryItems([...withCourseFolder, newLectureFile]);
+    navigate('/home');
   };
 
   const simulateTranscription = () => {
@@ -87,8 +132,7 @@ export function ActiveRecording() {
 
     let index = 0;
     const interval = setInterval(() => {
-      if (!isRecording || isPaused) {
-        clearInterval(interval);
+      if (isPaused) {
         return;
       }
 
@@ -182,6 +226,22 @@ export function ActiveRecording() {
               <option>French</option>
               <option>German</option>
               <option>Mandarin</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm mb-2 text-muted-foreground">
+              Save Recording Output
+            </label>
+            <select
+              value={saveLocation}
+              onChange={(e) => setSaveLocation(e.target.value as 'home' | 'course')}
+              disabled={isRecording}
+              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+            >
+              <option value="home">Home root directory</option>
+              <option value="course">Inside selected course folder</option>
             </select>
           </div>
         </div>

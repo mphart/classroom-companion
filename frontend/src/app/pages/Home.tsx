@@ -1,19 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import logo from '@/assets/corner-logo.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
-
-interface Item {
-  id: string;
-  name: string;
-  type: 'folder' | 'note';
-  lastEdited: Date;
-  path: string;
-}
+import {
+  buildPath,
+  collectDescendantIds,
+  getChildren,
+  getFolderPath,
+  getRootPath,
+  LibraryItem,
+  loadLibraryItems,
+  saveLibraryItems,
+  summarizeLectureContent,
+} from '@/app/lib/library';
 
 export function Home() {
   const navigate = useNavigate();
-  const [currentPath, setCurrentPath] = useState('Home');
+  const rootPath = getRootPath();
+  const [currentPath, setCurrentPath] = useState(rootPath);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -21,22 +25,23 @@ export function Home() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
+  const [items, setItems] = useState<LibraryItem[]>(() => loadLibraryItems());
 
-  const [items, setItems] = useState<Item[]>([
-    { id: '1', name: 'Physics', type: 'folder', lastEdited: new Date('2026-05-01'), path: 'Home/Physics' },
-    { id: '2', name: 'Mathematics', type: 'folder', lastEdited: new Date('2026-04-30'), path: 'Home/Mathematics' },
-    { id: '3', name: 'Lecture-04-28', type: 'note', lastEdited: new Date('2026-04-28'), path: 'Home/Lecture-04-28' },
-  ]);
+  useEffect(() => {
+    saveLibraryItems(items);
+  }, [items]);
 
-  const filteredItems = items
-    .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const visibleItems = useMemo(() => getChildren(items, currentPath), [items, currentPath]);
+
+  const filteredItems = visibleItems
+    .filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'lastEdited') return b.lastEdited.getTime() - a.lastEdited.getTime();
+      if (sortBy === 'lastEdited') return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       return 0;
     });
 
-  const handleItemClick = (item: Item) => {
+  const handleItemClick = (item: LibraryItem) => {
     if (selectionMode) {
       const newSelected = new Set(selectedItems);
       if (newSelected.has(item.id)) {
@@ -46,36 +51,156 @@ export function Home() {
       }
       setSelectedItems(newSelected);
     } else {
-      if (item.type === 'folder') {
-        setCurrentPath(item.path);
-      } else {
-        navigate('/viewer');
+      if (item.type === 'file') {
+        navigate('/viewer', {
+          state: {
+            title: item.name,
+            content: item.content ?? '',
+          },
+        });
       }
     }
   };
 
+  const handleItemDoubleClick = (item: LibraryItem) => {
+    if (!selectionMode && item.type === 'folder') {
+      setCurrentPath(getFolderPath(item));
+    }
+  };
+
+  const goUpOneLevel = () => {
+    if (currentPath === rootPath) {
+      return;
+    }
+    const segments = currentPath.split('/');
+    segments.pop();
+    setCurrentPath(segments.join('/') || rootPath);
+  };
+
   const handleNewFolder = () => {
-    const newFolder: Item = {
-      id: Date.now().toString(),
-      name: 'Untitled Folder',
+    const existingNames = new Set(
+      getChildren(items, currentPath)
+        .filter((item) => item.type === 'folder')
+        .map((item) => item.name.toLowerCase()),
+    );
+    let candidate = 'Untitled Folder';
+    let suffix = 1;
+    while (existingNames.has(candidate.toLowerCase())) {
+      suffix += 1;
+      candidate = `Untitled Folder ${suffix}`;
+    }
+
+    const newFolder: LibraryItem = {
+      id: crypto.randomUUID(),
+      name: candidate,
       type: 'folder',
-      lastEdited: new Date(),
-      path: `${currentPath}/Untitled Folder`,
+      parentPath: currentPath,
+      updatedAt: new Date().toISOString(),
     };
-    setItems([...items, newFolder]);
+    setItems((prev) => [...prev, newFolder]);
     setShowNewMenu(false);
   };
 
   const handleDelete = () => {
-    setItems(items.filter(item => !selectedItems.has(item.id)));
+    if (selectedItems.size === 0) {
+      return;
+    }
+    const removeIds = new Set<string>(selectedItems);
+
+    for (const item of items) {
+      if (item.type !== 'folder' || !selectedItems.has(item.id)) {
+        continue;
+      }
+      const folderPath = getFolderPath(item);
+      const descendants = collectDescendantIds(items, folderPath);
+      descendants.forEach((id) => removeIds.add(id));
+    }
+
+    setItems((prev) => prev.filter((item) => !removeIds.has(item.id)));
     setSelectedItems(new Set());
   };
 
   const handleGenerateSummary = () => {
-    navigate('/viewer');
+    const selected = items.filter((item) => selectedItems.has(item.id));
+    if (selected.length === 0) {
+      return;
+    }
+
+    const lectureFiles: LibraryItem[] = [];
+    const lectureIds = new Set<string>();
+
+    for (const item of selected) {
+      if (item.type === 'file' && item.fileKind === 'lecture') {
+        lectureFiles.push(item);
+        lectureIds.add(item.id);
+        continue;
+      }
+
+      if (item.type === 'folder') {
+        const descendants = collectDescendantIds(items, getFolderPath(item));
+        for (const candidate of items) {
+          if (
+            descendants.has(candidate.id) &&
+            candidate.type === 'file' &&
+            candidate.fileKind === 'lecture' &&
+            !lectureIds.has(candidate.id)
+          ) {
+            lectureFiles.push(candidate);
+            lectureIds.add(candidate.id);
+          }
+        }
+      }
+    }
+
+    if (lectureFiles.length === 0) {
+      window.alert('Select at least one lecture text file or a folder containing lecture files.');
+      return;
+    }
+
+    const summaryText = lectureFiles
+      .map((file) => {
+        const fileSummary = summarizeLectureContent(file.content ?? '');
+        return `- ${file.name}: ${fileSummary || 'No content available.'}`;
+      })
+      .join('\n');
+
+    const summaryName = `AI-Summary-${new Date().toISOString().slice(0, 10)}-${Date.now().toString().slice(-4)}.txt`;
+    const createdAt = new Date().toISOString();
+    const summaryContent = [
+      `AI Summary generated from ${lectureFiles.length} file(s).`,
+      '',
+      'Sources:',
+      ...lectureFiles.map((file) => `- ${file.name}`),
+      '',
+      'Summary:',
+      summaryText,
+    ].join('\n');
+
+    const summaryItem: LibraryItem = {
+      id: crypto.randomUUID(),
+      name: summaryName,
+      type: 'file',
+      parentPath: rootPath,
+      updatedAt: createdAt,
+      fileKind: 'summary',
+      content: summaryContent,
+    };
+
+    setItems((prev) => [...prev, summaryItem]);
+    setCurrentPath(rootPath);
+    setSelectedItems(new Set());
+    setSelectionMode(false);
+
+    navigate('/viewer', {
+      state: {
+        title: summaryItem.name,
+        content: summaryItem.content,
+      },
+    });
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (isoDate: string) => {
+    const date = new Date(isoDate);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -85,6 +210,9 @@ export function Home() {
     if (days < 7) return `${days} days ago`;
     return date.toLocaleDateString();
   };
+
+  const pathSegments = currentPath.split('/');
+  const atRoot = currentPath === rootPath;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -205,7 +333,16 @@ export function Home() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl">{currentPath}</h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={goUpOneLevel}
+              disabled={atRoot}
+              className="px-3 py-2 border border-border rounded-lg disabled:opacity-50"
+            >
+              Back
+            </button>
+            <h1 className="text-2xl">{pathSegments.join(' / ')}</h1>
+          </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -229,7 +366,7 @@ export function Home() {
               onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
             >
-              Generate Summary
+              Generate AI Summary
             </button>
             <button
               onClick={handleDelete}
@@ -237,11 +374,6 @@ export function Home() {
             >
               Delete
             </button>
-            {selectedItems.size === 1 && (
-              <button className="px-4 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground">
-                Rename
-              </button>
-            )}
           </div>
         )}
 
@@ -250,6 +382,7 @@ export function Home() {
             <div
               key={item.id}
               onClick={() => handleItemClick(item)}
+              onDoubleClick={() => handleItemDoubleClick(item)}
               className={`p-4 bg-card border border-border rounded-lg cursor-pointer hover:shadow-md transition-shadow ${
                 selectedItems.has(item.id) ? 'ring-2' : ''
               }`}
@@ -267,17 +400,22 @@ export function Home() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-2xl">
-                      {item.type === 'folder' ? '📁' : '📄'}
+                      {item.type === 'folder' ? '📁' : item.fileKind === 'summary' ? '🧠' : '📄'}
                     </span>
                     <h3 className="text-sm">{item.name}</h3>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(item.lastEdited)}
+                    {formatDate(item.updatedAt)}
                   </p>
                 </div>
               </div>
             </div>
           ))}
+          {filteredItems.length === 0 && (
+            <div className="col-span-4 text-center text-muted-foreground py-10 border border-dashed border-border rounded-lg">
+              No files or folders in this location.
+            </div>
+          )}
         </div>
       </div>
     </div>

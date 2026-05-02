@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
 
@@ -13,13 +13,15 @@ interface Document {
 
 export function Viewer() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState('1');
+  const openedFile = location.state as { title?: string; content?: string } | null;
 
   const sessionName = 'Lecture-05-02';
   const sessionDate = 'May 2, 2026 • 2:15 PM';
 
-  const documents: Document[] = [
+  const defaultDocuments: Document[] = [
     {
       id: '1',
       title: 'AI Summary',
@@ -136,7 +138,20 @@ A demonstration that light and matter can display characteristics of both waves 
     },
   ];
 
-  const selectedDoc = documents.find((doc) => doc.id === selectedDocId);
+  const documents: Document[] = openedFile?.title
+    ? [
+        {
+          id: 'opened-file',
+          title: openedFile.title,
+          type: 'generated_summary',
+          content: openedFile.content ?? '',
+          generated: true,
+        },
+      ]
+    : defaultDocuments;
+
+  const activeDocId = documents.some((doc) => doc.id === selectedDocId) ? selectedDocId : documents[0]?.id ?? '';
+  const selectedDoc = documents.find((doc) => doc.id === activeDocId);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
@@ -157,11 +172,11 @@ A demonstration that light and matter can display characteristics of both waves 
                 key={doc.id}
                 onClick={() => setSelectedDocId(doc.id)}
                 className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                  selectedDocId === doc.id
+                  activeDocId === doc.id
                     ? 'border'
                     : 'hover:bg-accent hover:text-accent-foreground'
                 }`}
-                style={selectedDocId === doc.id ? {
+                style={activeDocId === doc.id ? {
                   backgroundColor: 'var(--brand-soft-bg)',
                   color: 'var(--brand-deep)',
                   borderColor: 'var(--brand-soft-border)'

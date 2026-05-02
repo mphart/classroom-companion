@@ -17,7 +17,10 @@
   "license": "ISC",
   "type": "commonjs",
   "vitest": {
-    "exclude": ["**/node_modules/**", "**/dist/**"]
+    "exclude": [
+      "**/node_modules/**",
+      "**/dist/**"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -29,6 +32,7 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "mysql2": "^3.22.3",
+    "ws": "^8.20.0",
     "zod": "^4.4.2"
   },
   "devDependencies": {
@@ -39,6 +43,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.6.0",
     "@types/supertest": "^7.2.0",
+    "@types/ws": "^8.18.1",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",

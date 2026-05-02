@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
-import { getSessionUser } from '@/app/lib/authSession';
+import { floatToPCM16 } from '@/app/lib/audioPcm16k';
+import { getSessionUser, getToken } from '@/app/lib/authSession';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
+import { buildConfigureMessage, getTranscriptionStreamUrl } from '@/app/lib/transcriptionWs';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
+
+const BUFFER_SIZE = 4096;
+
+type TranscriptInbound = {
+  type: string;
+  text?: string;
+  message?: string;
+};
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -22,7 +33,11 @@ export function ActiveRecording() {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [language, setLanguage] = useState('English');
   const [notes, setNotes] = useState<string[]>(['']);
-  const [transcript, setTranscript] = useState('');
+  const [transcriptCommitted, setTranscriptCommitted] = useState('');
+  const [transcriptPartial, setTranscriptPartial] = useState('');
+  const [sttStatus, setSttStatus] = useState<{ kind: 'idle' | 'connecting' | 'live' | 'error'; message?: string }>({
+    kind: 'idle',
+  });
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -31,8 +46,19 @@ export function ActiveRecording() {
   const [saveLocation, setSaveLocation] = useState<'home' | 'course'>('home');
   const [loadingCourses, setLoadingCourses] = useState(false);
 
+  const transcriptionWsRef = useRef<WebSocket | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const muteGainRef = useRef<GainNode | null>(null);
+
+  const isPausedRef = useRef(false);
+  const transcriptCommittedRef = useRef('');
+  const transcriptPartialRef = useRef('');
+
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: NodeJS.Timeout;
     if (isRecording && !isPaused) {
       interval = setInterval(() => {
         setElapsedTime((prev) => prev + 1);
@@ -40,6 +66,117 @@ export function ActiveRecording() {
     }
     return () => clearInterval(interval);
   }, [isRecording, isPaused]);
+
+  const teardownAudioGraph = useCallback(() => {
+    try {
+      scriptProcessorRef.current?.disconnect();
+      mediaSourceRef.current?.disconnect();
+      muteGainRef.current?.disconnect();
+    } catch {
+      /* noop */
+    }
+    scriptProcessorRef.current = null;
+    mediaSourceRef.current = null;
+    muteGainRef.current = null;
+  }, []);
+
+  const stopMediaTracks = () => {
+    mediaStreamRef.current?.getTracks().forEach((t) => {
+      try {
+        t.stop();
+      } catch {
+        /* noop */
+      }
+    });
+    mediaStreamRef.current = null;
+  };
+
+  const closeTranscriptionWs = (code?: number) => {
+    const ws = transcriptionWsRef.current;
+    transcriptionWsRef.current = null;
+    if (!ws) return;
+    try {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
+    } catch {
+      /* noop */
+    }
+    try {
+      ws.close(code ?? 1000);
+    } catch {
+      /* noop */
+    }
+  };
+
+  const fullTranscript = useMemo(
+    () => [transcriptCommitted, transcriptPartial].map((s) => s.trim()).filter(Boolean).join(' ').trim(),
+    [transcriptCommitted, transcriptPartial],
+  );
+
+  useEffect(() => {
+    transcriptCommittedRef.current = transcriptCommitted;
+  }, [transcriptCommitted]);
+
+  useEffect(() => {
+    transcriptPartialRef.current = transcriptPartial;
+  }, [transcriptPartial]);
+
+  const attachScriptProcessorPipeline = useCallback((ws: WebSocket, audioContext: AudioContext) => {
+    const stream = mediaStreamRef.current;
+    if (!stream) return;
+    teardownAudioGraph();
+    const source = audioContext.createMediaStreamSource(stream);
+    mediaSourceRef.current = source;
+    /* ScriptProcessor deprecated but supported widely; MVP path before AudioWorklet. */
+    const processor = audioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
+    scriptProcessorRef.current = processor;
+    const mute = audioContext.createGain();
+    mute.gain.value = 0;
+    muteGainRef.current = mute;
+
+    processor.onaudioprocess = (ev) => {
+      if (!transcriptionWsRef.current || transcriptionWsRef.current.readyState !== WebSocket.OPEN) return;
+      if (isPausedRef.current) return;
+      const inputBuffer = ev.inputBuffer.getChannelData(0);
+      const copy = new Float32Array(inputBuffer.length);
+      copy.set(inputBuffer);
+      const pcm = floatToPCM16(copy, audioContext.sampleRate);
+      const target = transcriptionWsRef.current;
+      if (target && target.readyState === WebSocket.OPEN) {
+        const sliced = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
+        target.send(sliced);
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(mute);
+    mute.connect(audioContext.destination);
+  }, [teardownAudioGraph]);
+
+  const buildAudioGraphAndStreamPCM = useCallback(
+    async (ws: WebSocket) => {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      mediaStreamRef.current = stream;
+
+      const audioContext =
+        audioContextRef.current ??
+        new AudioContext({
+          latencyHint: 'interactive',
+        });
+      audioContextRef.current = audioContext;
+      await audioContext.resume();
+
+      attachScriptProcessorPipeline(ws, audioContext);
+      setSttStatus({ kind: 'live' });
+    },
+    [attachScriptProcessorPipeline],
+  );
 
   const reloadCourses = useCallback(async () => {
     if (!userRoot) return;
@@ -57,6 +194,10 @@ export function ActiveRecording() {
   useEffect(() => {
     void reloadCourses();
   }, [reloadCourses]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -83,29 +224,145 @@ export function ActiveRecording() {
     }
   };
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
     if (saveLocation === 'course' && !selectedCourse) {
       window.alert('Please select or create a course folder first.');
       return;
     }
-    setTranscript('');
+
+    const token = getToken();
+    if (!token) {
+      window.alert('Your session expired. Please log in again.');
+      return;
+    }
+
+    setTranscriptCommitted('');
+    setTranscriptPartial('');
+    transcriptCommittedRef.current = '';
+    transcriptPartialRef.current = '';
+    setSttStatus({ kind: 'connecting' });
     setElapsedTime(0);
     setIsRecording(true);
     setIsPaused(false);
+    isPausedRef.current = false;
+
+    closeTranscriptionWs();
+    teardownAudioGraph();
+    stopMediaTracks();
+
+    try {
+      const wsUrl = getTranscriptionStreamUrl(token);
+      const ws = new WebSocket(wsUrl);
+      transcriptionWsRef.current = ws;
+
+      ws.onopen = async () => {
+        try {
+          ws.send(buildConfigureMessage(language));
+          await buildAudioGraphAndStreamPCM(ws);
+        } catch (err) {
+          setSttStatus({
+            kind: 'error',
+            message: err instanceof Error ? err.message : 'Microphone unavailable.',
+          });
+          window.alert(err instanceof Error ? err.message : 'Microphone unavailable.');
+          closeTranscriptionWs();
+          teardownAudioGraph();
+          stopMediaTracks();
+          setIsRecording(false);
+        }
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const raw = typeof evt.data === 'string' ? evt.data : '';
+          const parsed = JSON.parse(raw) as TranscriptInbound;
+          if (parsed.type === 'error') {
+            setSttStatus({ kind: 'error', message: parsed.message ?? 'Transcription error' });
+            return;
+          }
+          if (parsed.type === 'partial') {
+            const t = typeof parsed.text === 'string' ? parsed.text : '';
+            transcriptPartialRef.current = t;
+            setTranscriptPartial(t);
+            return;
+          }
+          if (parsed.type === 'final') {
+            const text = typeof parsed.text === 'string' ? parsed.text.trim() : '';
+            if (text.length > 0) {
+              setTranscriptCommitted((prev) => {
+                const next = prev ? `${prev} ${text}` : text;
+                transcriptCommittedRef.current = next;
+                return next;
+              });
+            }
+            transcriptPartialRef.current = '';
+            setTranscriptPartial('');
+          }
+        } catch {
+          /* ignored */
+        }
+      };
+
+      ws.onerror = () => {
+        setSttStatus({ kind: 'error', message: 'WebSocket error' });
+      };
+
+      ws.onclose = () => {
+        if (transcriptionWsRef.current === ws) transcriptionWsRef.current = null;
+      };
+    } catch (err) {
+      setIsRecording(false);
+      setSttStatus({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not connect to transcription',
+      });
+    }
   };
 
-  const handlePauseRecording = () => {
-    setIsPaused(!isPaused);
+  const rebuildLiveAudioGraphAfterResume = useCallback(async () => {
+    const ws = transcriptionWsRef.current;
+    const stream = mediaStreamRef.current;
+    const audioContext = audioContextRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !stream || !audioContext) return;
+    await audioContext.resume();
+    attachScriptProcessorPipeline(ws, audioContext);
+  }, [attachScriptProcessorPipeline]);
+
+  const handlePauseRecording = async () => {
+    if (!isRecording) return;
+    const next = !isPaused;
+    setIsPaused(next);
+    isPausedRef.current = next;
+    if (next) {
+      teardownAudioGraph();
+      try {
+        await audioContextRef.current?.suspend();
+      } catch {
+        /* noop */
+      }
+    } else {
+      await rebuildLiveAudioGraphAfterResume();
+    }
   };
 
   const handleStopRecording = async () => {
     if (!userRoot) return;
     if (saveLocation === 'course' && !selectedCourse) {
-      window.alert('Please select or create a course folder.');
+      window.alert('Please select a course folder.');
       return;
     }
 
     setIsRecording(false);
+    isPausedRef.current = false;
+    closeTranscriptionWs();
+    teardownAudioGraph();
+    try {
+      await audioContextRef.current?.close();
+    } catch {
+      /* noop */
+    }
+    audioContextRef.current = null;
+    stopMediaTracks();
 
     const cleanedNotes = notes
       .map((note) => note.trim())
@@ -125,7 +382,14 @@ export function ActiveRecording() {
       cleanedNotes || '- No notes were captured.',
       '',
       'Transcript:',
-      transcript.trim() || '(no transcript — open this note later or use Generate AI Summary on multiple notes)',
+      (() => {
+        const merged = [transcriptCommittedRef.current, transcriptPartialRef.current]
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        return merged || fullTranscript || 'No transcript captured yet.';
+      })(),
     ].join('\n');
 
     try {
@@ -142,6 +406,16 @@ export function ActiveRecording() {
       setIsRecording(false);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      closeTranscriptionWs();
+      teardownAudioGraph();
+      void audioContextRef.current?.close();
+      audioContextRef.current = null;
+      stopMediaTracks();
+    };
+  }, []);
 
   const handleCreateCourse = async () => {
     const name = newCourseName.trim();
@@ -270,29 +544,21 @@ export function ActiveRecording() {
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto">
-          <div className="max-w-4xl mx-auto space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label htmlFor="lecture-transcript" className="text-sm font-medium text-foreground">
-                Transcript & lecture capture
-              </label>
-              {isRecording ? (
-                <span className="text-xs text-muted-foreground">{isPaused ? 'Paused' : 'Session running'}</span>
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-card rounded-lg shadow-sm border border-border p-6 min-h-96">
+              {sttStatus.kind !== 'idle' && sttStatus.kind !== 'live' ? (
+                <p className="text-sm text-amber-600 dark:text-amber-500 mb-2">
+                  {sttStatus.kind === 'connecting' && 'Connecting to transcription…'}
+                  {sttStatus.kind === 'error' &&
+                    `Transcription issue: ${sttStatus.message ?? 'Unknown error'}. You can still finish and save notes.`}
+                </p>
               ) : null}
+              {!fullTranscript ? (
+                <p className="text-muted-foreground">Click Start to begin recording...</p>
+              ) : (
+                <p className="whitespace-pre-wrap">{fullTranscript}</p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mb-2">
-              There is no mock transcript — type live, paste from captions, or leave blank and capture text from your
-              notes only. Saved content is sent to your library and can be summarized with Gemini from Home (Select +
-              Generate).
-            </p>
-            <textarea
-              id="lecture-transcript"
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              spellCheck
-              placeholder="Type lecture content here, paste slide text, paste automated captions …"
-              className="w-full min-h-[280px] rounded-lg border border-border bg-input-background p-4 text-sm leading-relaxed focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
-            />
           </div>
         </div>
 
@@ -300,13 +566,14 @@ export function ActiveRecording() {
           <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
             {!isRecording ? (
               <button
-                onClick={() => handleStartRecording()}
+                type="button"
+                onClick={() => void handleStartRecording()}
                 className="px-8 py-3 text-white rounded-lg transition-colors"
                 style={{ backgroundColor: 'var(--brand)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--brand)')}
               >
-                Start Session
+                Start Recording
               </button>
             ) : (
               <>

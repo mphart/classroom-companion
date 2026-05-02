@@ -34,6 +34,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

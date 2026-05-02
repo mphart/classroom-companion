@@ -15,7 +15,6 @@ import {
   pathTitleSegments,
   userRootDirectory,
 } from '@/app/lib/pathUtils';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function Home() {
   const navigate = useNavigate();
@@ -234,7 +233,6 @@ export function Home() {
             </div>
 
             <div className="relative flex items-center gap-3">
-              <ThemeToggle />
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="w-10 h-10 rounded-full text-white flex items-center justify-center"

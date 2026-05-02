@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { getNote, type NoteDto } from '@/app/lib/api';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 type ViewerState = {
   noteId?: number;
@@ -87,7 +86,6 @@ export function Viewer() {
             </button>
           </div>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             <img src={logo} alt="ClassroomCompanion" className="h-10 w-auto" />
           </div>
         </div>

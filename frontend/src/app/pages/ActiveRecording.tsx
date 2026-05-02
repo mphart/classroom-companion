@@ -4,7 +4,6 @@ import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
 import { getSessionUser } from '@/app/lib/authSession';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -272,9 +271,8 @@ export function ActiveRecording() {
 
       <div className="flex-1 flex flex-col">
         <div className="bg-card border-b border-border p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4">
             <h2 className="text-xl">Enter Notes</h2>
-            <ThemeToggle />
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {notes.map((note, index) => (

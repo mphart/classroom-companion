@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import '@/styles/brand-ambient.css';
+import '@/styles/home-library-dark.css';
 import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
@@ -48,6 +49,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
+import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
 import { cn } from '@/app/components/ui/utils';
 import { clearSession, getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
@@ -159,7 +161,7 @@ function DotDotFolderRow({
         }
       }}
       className={cn(
-        'cursor-pointer rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:bg-muted/50',
+        'cursor-pointer rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:bg-muted/50 dark:border-[color-mix(in_srgb,var(--brand)_32%,transparent)] dark:bg-[oklch(0.16_0.02_150/0.35)] dark:hover:bg-[oklch(0.2_0.03_150/0.4)]',
         compact ? 'px-2 py-1.5' : 'p-4',
         layout === 'list' && 'w-full',
         layout === 'group' && 'col-span-4',
@@ -230,6 +232,7 @@ function BrowseItemCard({
       }}
       className={cn(
         'cursor-pointer rounded-lg border border-border bg-card p-4 transition-all duration-300 ease-out will-change-transform hover:-translate-y-0.5 hover:shadow-lg',
+        'dark:border-[color-mix(in_srgb,var(--brand)_24%,transparent)] dark:bg-gradient-to-br dark:from-[oklch(0.2_0.03_150)] dark:via-card dark:to-[oklch(0.11_0.01_0)] dark:shadow-[0_10px_40px_-20px_rgba(0,0,0,0.75)] dark:hover:border-[color-mix(in_srgb,var(--brand)_48%,transparent)] dark:hover:shadow-[0_0_32px_-10px_color-mix(in_srgb,var(--brand)_42%,transparent)]',
         layout === 'list' && 'w-full',
         selected && 'ring-2',
         isDragging && 'opacity-60',
@@ -862,27 +865,29 @@ export function Home() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
+      <div className="home-library-root relative min-h-screen overflow-x-hidden bg-background text-foreground">
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
           <div
-            className="brand-ambient-blob-a absolute -left-[15%] -top-[28%] h-[min(56vw,28rem)] w-[min(56vw,28rem)] rounded-full bg-[var(--brand)] opacity-[0.14] blur-[4.5rem] dark:opacity-[0.19]"
+            className="brand-ambient-blob-a absolute -left-[15%] -top-[28%] h-[min(56vw,28rem)] w-[min(56vw,28rem)] rounded-full bg-[var(--brand)] opacity-[0.14] blur-[4.5rem] dark:opacity-[0.34]"
             style={{ animationDelay: '-2.5s' }}
           />
           <div
-            className="brand-ambient-blob-b absolute -right-[12%] top-[18%] h-[min(50vw,26rem)] w-[min(50vw,26rem)] rounded-full bg-[var(--brand-deep)] opacity-[0.11] blur-[4rem] dark:opacity-[0.16]"
+            className="brand-ambient-blob-b absolute -right-[12%] top-[18%] h-[min(50vw,26rem)] w-[min(50vw,26rem)] rounded-full bg-[var(--brand-deep)] opacity-[0.11] blur-[4rem] dark:opacity-[0.28]"
             style={{ animationDelay: '-6s' }}
           />
           <div
-            className="brand-ambient-blob-c absolute bottom-[-18%] left-[20%] h-[min(62vw,32rem)] w-[min(62vw,32rem)] rounded-full bg-[var(--brand)] opacity-[0.1] blur-[5rem] dark:opacity-[0.14]"
+            className="brand-ambient-blob-c absolute bottom-[-18%] left-[20%] h-[min(62vw,32rem)] w-[min(62vw,32rem)] rounded-full bg-[var(--brand)] opacity-[0.1] blur-[5rem] dark:opacity-[0.26]"
             style={{ animationDelay: '-1s' }}
           />
+          <PageAmbientDecor />
+          <div className="home-library-bloom pointer-events-none absolute bottom-[-20%] left-1/2 hidden h-[min(46vh,22rem)] w-[min(118vw,58rem)] -translate-x-1/2 rounded-[100%] bg-[var(--brand)] blur-[5rem] dark:block" />
         </div>
 
         <motion.div
           initial={reduceMotion ? false : { opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-          className="border-b border-border bg-card"
+          className="border-b border-border bg-card dark:border-[color-mix(in_srgb,var(--brand)_14%,transparent)] dark:bg-[oklch(0.13_0.01_0)] dark:shadow-[0_12px_40px_-28px_rgba(0,0,0,0.65)]"
         >
           <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
@@ -1041,14 +1046,9 @@ export function Home() {
           initial={reduceMotion ? false : { opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.42, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
-          className="mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[var(--brand-soft-bg)] via-card to-card shadow-sm"
+          className="home-hero-glow mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[var(--brand-soft-bg)] via-card to-card shadow-sm"
         >
-          <div
-            className="h-1 w-full opacity-90"
-            style={{
-              background: `linear-gradient(90deg, transparent, var(--brand), var(--brand-hover), transparent)`,
-            }}
-          />
+          <div className="brand-accent-bar-animated h-1 w-full opacity-90" aria-hidden />
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <div
@@ -1087,8 +1087,14 @@ export function Home() {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
+        <motion.div
+          className="mb-6 flex items-center justify-between"
+          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
+          key={`browse-toolbar-${pathSegments.join('/')}`}
+        >
+          <div className="flex flex-wrap items-center gap-3">
             <motion.button
               type="button"
               onClick={goUpOneLevel}
@@ -1190,14 +1196,19 @@ export function Home() {
               <span className="text-sm">Select</span>
             </label>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+        <motion.div
+          className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.38, delay: reduceMotion ? 0 : 0.1, ease: [0.22, 1, 0.36, 1] }}
+        >
           <span className="font-medium text-foreground">Tip:</span> Turn on <span className="text-foreground">Select</span>, pick
           notes and/or folders (folders include everything inside), then generate a combined summary or practice exam.
           When you finish a recording, we scan the transcript for exams or due dates and can show them on the calendar
           below.
-        </div>
+        </motion.div>
 
         <Dialog open={importantAlertOpen} onOpenChange={setImportantAlertOpen}>
           <DialogContent className="sm:max-w-lg">
@@ -1304,6 +1315,7 @@ export function Home() {
           </DialogContent>
         </Dialog>
 
+        <div className="home-folder-stage">
         <AnimatePresence>
           {selectionMode && selectedItems.size > 0 ? (
             <motion.div
@@ -1366,7 +1378,7 @@ export function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
-            <aside className="shrink-0 rounded-lg border border-border bg-card px-4 py-3 lg:w-52">
+            <aside className="shrink-0 rounded-lg border border-border bg-card px-4 py-3 lg:w-52 dark:border-[color-mix(in_srgb,var(--brand)_20%,transparent)] dark:bg-[oklch(0.14_0.02_150/0.5)]">
               <p className="mb-3 text-sm font-medium text-foreground">Show</p>
               <div className="flex flex-col gap-2 text-sm">
                 <label className="flex cursor-pointer items-center gap-2">
@@ -1424,7 +1436,7 @@ export function Home() {
               </p>
             </aside>
 
-            <div className="min-w-0 flex-1 rounded-lg border border-border bg-card">
+            <div className="min-w-0 flex-1 rounded-lg border border-border bg-card dark:border-[color-mix(in_srgb,var(--brand)_22%,transparent)] dark:bg-[oklch(0.12_0.01_0)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
                 <Button
                   type="button"
@@ -1582,7 +1594,7 @@ export function Home() {
             ))}
             {!loading && items.length === 0 ? (
               <motion.div
-                className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground"
+                className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground dark:border-[color-mix(in_srgb,var(--brand)_38%,transparent)] dark:bg-[oklch(0.14_0.02_150/0.45)] dark:shadow-[inset_0_0_40px_rgba(92,201,122,0.07)]"
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -1633,7 +1645,7 @@ export function Home() {
             ))}
             {!loading && items.length === 0 ? (
               <motion.div
-                className="col-span-4 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground"
+                className="col-span-4 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground dark:border-[color-mix(in_srgb,var(--brand)_38%,transparent)] dark:bg-[oklch(0.14_0.02_150/0.45)] dark:shadow-[inset_0_0_40px_rgba(92,201,122,0.07)]"
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -1643,6 +1655,8 @@ export function Home() {
             ) : null}
           </motion.div>
         )}
+        </div>
+
       </motion.div>
 
       <Dialog

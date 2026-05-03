@@ -5,6 +5,7 @@ import { BookOpen, FileText, Mic, Presentation, Sparkles } from 'lucide-react';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { fetchNotePdfBlob, getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
+import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
 import { getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
 import '@/styles/brand-ambient.css';
@@ -164,17 +165,17 @@ export function Viewer() {
           className="brand-ambient-blob-c absolute right-[-8%] bottom-[15%] h-[min(42vmin,18rem)] w-[min(42vmin,18rem)] rounded-full bg-[var(--brand)] opacity-[0.06] blur-[3rem]"
           style={{ animationDelay: '-1s' }}
         />
+        <PageAmbientDecor />
       </div>
 
-      <div className="relative z-10 flex w-80 shrink-0 flex-col border-r border-border bg-card/95 backdrop-blur-sm dark:bg-card/90">
+      <motion.div
+        className="relative z-10 flex w-80 shrink-0 flex-col border-r border-border bg-card/95 backdrop-blur-sm dark:bg-card/90"
+        initial={reduceMotion ? false : { opacity: 0, x: -12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
         <div className="p-6">
-          <div
-            className="mb-4 h-1 w-full rounded-full opacity-90"
-            style={{
-              background: `linear-gradient(90deg, transparent, var(--brand), var(--brand-hover), transparent)`,
-            }}
-            aria-hidden
-          />
+          <div className="brand-accent-bar-animated mb-4 h-1 w-full rounded-full opacity-90" aria-hidden />
           <div className="mb-5 flex items-start gap-3">
             <div
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xs font-semibold text-white shadow-md ring-1 ring-black/5 dark:ring-white/10"
@@ -220,10 +221,15 @@ export function Viewer() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-card/95 px-6 py-4 backdrop-blur-sm dark:bg-card/90">
+        <motion.div
+          className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-card/95 px-6 py-4 backdrop-blur-sm dark:bg-card/90"
+          initial={reduceMotion ? false : { opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: reduceMotion ? 0 : 0.04, ease: [0.22, 1, 0.36, 1] }}
+        >
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -270,7 +276,7 @@ export function Viewer() {
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClassroomCompanion" className="h-10 w-auto" />
           </div>
-        </div>
+        </motion.div>
 
         <div className="flex-1 overflow-y-auto p-8">
           <div className={`mx-auto ${note?.sourceType === 'slide_pdf' ? 'max-w-5xl' : 'max-w-3xl'}`}>

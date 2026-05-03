@@ -59,6 +59,7 @@ export const mapNoteResponse = (record: NoteWithItem | null) => {
     sourceType: record.note.sourceType,
     generatedFromCount: record.note.generatedFromCount,
     ...(pdfUrl ? { pdfUrl } : {}),
+    ...(record.note.youtubeSourceUrl ? { youtubeSourceUrl: record.note.youtubeSourceUrl } : {}),
   };
 };
 

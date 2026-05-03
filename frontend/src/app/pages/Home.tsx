@@ -33,8 +33,10 @@ import '@/styles/home-library-dark.css';
 import flashcardsListIcon from '@/assets/flashcards.svg';
 import logo from '@/assets/corner-logo.svg';
 import {
+  ApiRequestError,
   createFolder,
   deleteItems,
+  formatApiErrorDetails,
   generateFlashcardsSelection,
   generatePracticeExam,
   listItems,
@@ -45,6 +47,7 @@ import {
   uploadSlidePdf,
   type ListedItemDto,
 } from '@/app/lib/api';
+import { CourseFolderSelect } from '@/app/components/CourseFolderSelect';
 import { Button } from '@/app/components/ui/button';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import {
@@ -74,6 +77,7 @@ import {
   pathTitleSegments,
   userRootDirectory,
 } from '@/app/lib/pathUtils';
+import { isLikelyYoutubeVideoUrl } from '@/app/lib/youtubeUrl';
 
 /** Emoji (~text-2xl) or SVG for flashcards — aligned to ~24px row height. */
 function browseItemLeadingIcon(item: ListedItemDto): ReactNode {
@@ -94,6 +98,24 @@ function browseItemLeadingIcon(item: ListedItemDto): ReactNode {
     );
   if (t === 'slide_pdf') return <span className="text-2xl leading-none">📑</span>;
   return <span className="text-2xl leading-none">📄</span>;
+}
+
+function browseItemTypeLabel(item: ListedItemDto): string {
+  if (item.type === 'folder') return 'Folder';
+  switch (item.noteSourceType) {
+    case 'generated_summary':
+      return 'Summary';
+    case 'generated_practice_exam':
+      return 'Practice exam';
+    case 'generated_flashcards':
+      return 'Flashcards';
+    case 'slide_pdf':
+      return 'PDF note';
+    case 'recording':
+      return 'Recording note';
+    default:
+      return 'Note';
+  }
 }
 
 /** Matches backend `items.name` / rename zod schema (`itemRoutes`). */
@@ -248,6 +270,68 @@ function BrowseItemCard({
   onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>;
 }) {
   const { attachRef, isDragging, isOver, canDrop } = useBrowseItemDnD(item, loading, onMoveToFolder);
+
+  if (layout === 'list') {
+    return (
+      <div
+        ref={attachRef}
+        role="button"
+        tabIndex={0}
+        onClick={() => onActivate(item)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onActivate(item);
+          }
+        }}
+        className={cn(
+          'cursor-pointer rounded-lg border border-border bg-card px-3 py-2 transition-colors duration-200 hover:bg-muted/40',
+          'dark:border-[color-mix(in_srgb,var(--brand)_20%,transparent)] dark:bg-[oklch(0.14_0.01_0)] dark:hover:bg-[oklch(0.17_0.02_150)]',
+          selected && 'ring-2',
+          isDragging && 'opacity-60',
+          item.type === 'folder' && isOver && canDrop && 'ring-2 ring-[var(--brand)]',
+        )}
+        style={selected ? ({ '--tw-ring-color': 'var(--brand)' } as CSSProperties) : undefined}
+      >
+        <div className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {selectionMode ? (
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => {}}
+                className="pointer-events-none h-4 w-4 shrink-0"
+                aria-hidden
+              />
+            ) : null}
+            <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
+            <span className="truncate text-sm font-medium">{item.name}</span>
+          </div>
+          <div className="truncate text-xs text-muted-foreground">{formatRelativeDate(item.createdDate)}</div>
+          <div className="truncate text-xs text-muted-foreground">{browseItemTypeLabel(item)}</div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            disabled={loading}
+            aria-label={item.type === 'folder' ? `Rename folder ${item.name}` : `Open ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.type === 'folder') {
+                onRenameFolder(item);
+                return;
+              }
+              onActivate(item);
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Pencil className="size-4" aria-hidden />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -456,6 +540,15 @@ export function Home() {
   const [parseVideoDialogOpen, setParseVideoDialogOpen] = useState(false);
   const [parseVideoUrl, setParseVideoUrl] = useState('');
   const [parseVideoFieldError, setParseVideoFieldError] = useState('');
+  const [videoParsing, setVideoParsing] = useState(false);
+  const [parseSaveLocation, setParseSaveLocation] = useState<'home' | 'course'>('home');
+  const [parseSelectedCourse, setParseSelectedCourse] = useState('');
+  const [parseCourseFolders, setParseCourseFolders] = useState<ListedItemDto[]>([]);
+  const [parseLoadingCourses, setParseLoadingCourses] = useState(false);
+  const [parseYoutubeLanguage, setParseYoutubeLanguage] = useState('English');
+  const [parseTitleOverride, setParseTitleOverride] = useState('');
+  const [parseCourseModalOpen, setParseCourseModalOpen] = useState(false);
+  const [parseNewCourseName, setParseNewCourseName] = useState('');
   const pdfFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -485,6 +578,19 @@ export function Home() {
     if (sortBy === 'lastEdited') return { sortBy: 'lastEditedDate' as const, sortDir: 'desc' as const };
     return { sortBy: 'creationDate' as const, sortDir: 'desc' as const };
   }, [sortBy]);
+
+  const reloadParseCourseFolders = useCallback(async () => {
+    if (!userRoot) return;
+    setParseLoadingCourses(true);
+    try {
+      const rows = await listItems({ directory: userRoot, sortBy: 'name', sortDir: 'asc' });
+      setParseCourseFolders(rows.filter((i) => i.type === 'folder'));
+    } catch {
+      toast.error('Could not load folders from Home.');
+    } finally {
+      setParseLoadingCourses(false);
+    }
+  }, [userRoot]);
 
   const loadItems = useCallback(async () => {
     if (!userRoot || !currentDirectory) return;
@@ -754,48 +860,97 @@ export function Home() {
     }
   };
 
-  const handleParseVideoFromDialog = async () => {
+  const normalizedParseYoutubeUrl = useMemo(() => {
+    const raw = parseVideoUrl.trim();
+    if (!raw) return '';
+    return raw.startsWith('http') ? raw : `https://${raw}`;
+  }, [parseVideoUrl]);
+
+  const parseYoutubeSubmitEnabled =
+    Boolean(normalizedParseYoutubeUrl) &&
+    isLikelyYoutubeVideoUrl(normalizedParseYoutubeUrl) &&
+    (parseSaveLocation === 'home' || Boolean(parseSelectedCourse));
+
+  const validateParseYoutubeField = useCallback((raw: string) => {
+    const t = raw.trim();
+    if (!t) {
+      setParseVideoFieldError('');
+      return;
+    }
+    const norm = t.startsWith('http') ? t : `https://${t}`;
+    setParseVideoFieldError(isLikelyYoutubeVideoUrl(norm) ? '' : 'Please enter a valid YouTube URL.');
+  }, []);
+
+  const handleParseCreateCourseFromModal = async () => {
+    const name = parseNewCourseName.trim();
+    if (!name || !userRoot) return;
+    try {
+      await createFolder(name, userRoot);
+      await reloadParseCourseFolders();
+      setParseSaveLocation('course');
+      setParseSelectedCourse(name);
+      setParseCourseModalOpen(false);
+      setParseNewCourseName('');
+      toast.success('Folder created');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create course folder');
+    }
+  };
+
+  const handleConfirmParseYoutube = () => {
     const raw = parseVideoUrl.trim();
     if (!raw) {
-      setParseVideoFieldError('Paste a YouTube link.');
+      setParseVideoFieldError('Please enter a valid YouTube URL.');
       return;
     }
-    try {
-      const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
-      if (!u.hostname.includes('youtu')) {
-        setParseVideoFieldError('Enter a valid YouTube URL.');
-        return;
-      }
-    } catch {
-      setParseVideoFieldError('Enter a valid YouTube URL.');
+    const urlNormalized = raw.startsWith('http') ? raw : `https://${raw.trim()}`;
+    if (!isLikelyYoutubeVideoUrl(urlNormalized)) {
+      setParseVideoFieldError('Please enter a valid YouTube URL.');
       return;
     }
+    if (parseSaveLocation === 'course' && !parseSelectedCourse) return;
+    if (!userRoot) return;
 
-    if (!currentDirectory) return;
-    setParseVideoFieldError('');
-    setLoading(true);
-    setError('');
-    try {
-      const urlNormalized = raw.startsWith('http') ? raw.trim() : `https://${raw.trim()}`;
-      const result = await parseYoutubeVideo({
-        youtubeUrl: urlNormalized,
-        directory: currentDirectory,
-      });
-      setParseVideoDialogOpen(false);
-      setParseVideoUrl('');
-      await loadItems();
-      toast.success('Video parsed');
-      navigate(
-        { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
-        { state: { noteId: result.note.id, browseDirectory: currentDirectory } },
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not parse video';
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+    const directory =
+      parseSaveLocation === 'home' ? userRoot : joinDirectory(userRoot, parseSelectedCourse);
+
+    setParseVideoDialogOpen(false);
+    setVideoParsing(true);
+
+    void (async () => {
+      try {
+        const result = await parseYoutubeVideo({
+          youtubeUrl: urlNormalized,
+          directory,
+          language: parseYoutubeLanguage,
+          title: parseTitleOverride.trim() || undefined,
+        });
+        setParseVideoUrl('');
+        setParseTitleOverride('');
+        await refreshDirectoryItems();
+        if (result.summarySkipped) {
+          toast.success('Video parsed', { description: "Can't generate a summary now." });
+        } else {
+          toast.success('Video parsed');
+        }
+        navigate(
+          { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
+          { state: { noteId: result.note.id, browseDirectory: directory } },
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Could not parse video';
+        const rawDesc =
+          err instanceof ApiRequestError && err.details && Object.keys(err.details).length > 0
+            ? formatApiErrorDetails(err.details)
+            : undefined;
+        const desc = rawDesc && rawDesc.trim() !== msg.trim() ? rawDesc : undefined;
+        console.error('[youtube parse]', err);
+        setError(desc ? `${msg}\n${desc}` : msg);
+        toast.error(msg, desc ? { description: desc } : undefined);
+      } finally {
+        setVideoParsing(false);
+      }
+    })();
   };
 
   const handleDelete = async () => {
@@ -1093,6 +1248,11 @@ export function Home() {
                   onClick={() => {
                     setParseVideoFieldError('');
                     setParseVideoUrl('');
+                    setParseSaveLocation('home');
+                    setParseSelectedCourse('');
+                    setParseTitleOverride('');
+                    setParseYoutubeLanguage('English');
+                    void reloadParseCourseFolders();
                     setParseVideoDialogOpen(true);
                   }}
                   className="inline-flex min-h-10 min-w-0 flex-1 basis-[30%] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 sm:basis-auto sm:px-4"
@@ -1575,47 +1735,159 @@ export function Home() {
             if (!open) {
               setParseVideoFieldError('');
               setParseVideoUrl('');
+              setParseSaveLocation('home');
+              setParseSelectedCourse('');
+              setParseTitleOverride('');
+              setParseYoutubeLanguage('English');
             }
           }}
         >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Parse video</DialogTitle>
-              <DialogDescription>
-                Paste a YouTube link. The note will be created in your current folder:{' '}
-                <span className="font-medium text-foreground">{browseLocationLabel}</span>.
+          <DialogContent
+            overlayClassName="backdrop-blur-[8px] bg-transparent"
+            className="gap-5 rounded-2xl border-[color-mix(in_srgb,var(--brand)_22%,transparent)] bg-card/95 p-8 shadow-2xl backdrop-blur-sm sm:max-w-[440px] dark:bg-[oklch(0.14_0.02_150/0.92)] dark:border-[color-mix(in_srgb,var(--brand)_28%,transparent)]"
+          >
+            <DialogHeader className="gap-2 text-left">
+              <DialogTitle className="text-xl font-semibold tracking-tight">Parse a YouTube Video</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                We&apos;ll download audio, transcribe it, and save AI study notes to the course folder you choose.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-2 py-2">
-              <Label htmlFor="parse-video-url">YouTube URL</Label>
-              <Input
-                id="parse-video-url"
-                type="url"
-                inputMode="url"
-                value={parseVideoUrl}
-                onChange={(e) => setParseVideoUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=…"
-                aria-invalid={Boolean(parseVideoFieldError)}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void handleParseVideoFromDialog();
-                  }
-                }}
-              />
-              {parseVideoFieldError ? <p className="text-sm text-destructive">{parseVideoFieldError}</p> : null}
+            <div className="grid gap-4 py-1">
+              <div className="grid gap-2">
+                <Label htmlFor="parse-video-url">YouTube Link</Label>
+                <Input
+                  id="parse-video-url"
+                  type="url"
+                  inputMode="url"
+                  value={parseVideoUrl}
+                  onChange={(e) => {
+                    setParseVideoUrl(e.target.value);
+                    if (parseVideoFieldError) validateParseYoutubeField(e.target.value);
+                  }}
+                  onBlur={() => validateParseYoutubeField(parseVideoUrl)}
+                  onPaste={(e) => {
+                    const el = e.currentTarget;
+                    requestAnimationFrame(() => validateParseYoutubeField(el.value));
+                  }}
+                  placeholder="https://www.youtube.com/watch?v=… or https://youtu.be/…"
+                  aria-invalid={Boolean(parseVideoFieldError)}
+                  autoFocus
+                  className="h-11"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmParseYoutube();
+                    }
+                  }}
+                />
+                {parseVideoFieldError ? (
+                  <p className="text-sm text-destructive">{parseVideoFieldError}</p>
+                ) : null}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="parse-course-select">Course</Label>
+                <CourseFolderSelect
+                  id="parse-course-select"
+                  loadingCourses={parseLoadingCourses}
+                  courseFolders={parseCourseFolders}
+                  saveLocation={parseSaveLocation}
+                  selectedCourse={parseSelectedCourse}
+                  onHomeSelect={() => setParseSaveLocation('home')}
+                  onCourseSelect={(name) => {
+                    setParseSaveLocation('course');
+                    setParseSelectedCourse(name);
+                  }}
+                  onCreateNewRequest={() => setParseCourseModalOpen(true)}
+                  disabled={loading}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="parse-youtube-lang">Language</Label>
+                <select
+                  id="parse-youtube-lang"
+                  value={parseYoutubeLanguage}
+                  onChange={(e) => setParseYoutubeLanguage(e.target.value)}
+                  className="h-11 w-full rounded-lg border border-border bg-input-background px-3 py-2 text-[15px] focus:outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': 'var(--brand)' } as CSSProperties}
+                >
+                  <option>English</option>
+                  <option>Spanish</option>
+                  <option>French</option>
+                  <option>German</option>
+                  <option>Mandarin</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="parse-youtube-title">Title (optional)</Label>
+                <Input
+                  id="parse-youtube-title"
+                  value={parseTitleOverride}
+                  onChange={(e) => setParseTitleOverride(e.target.value.slice(0, 160))}
+                  placeholder="Defaults to the video title"
+                  className="h-11"
+                  maxLength={160}
+                />
+              </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:justify-center">
               <Button type="button" variant="outline" onClick={() => setParseVideoDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="button" disabled={loading} onClick={() => void handleParseVideoFromDialog()}>
-                {loading ? 'Parsing…' : 'Parse'}
+              <Button
+                type="button"
+                disabled={!parseYoutubeSubmitEnabled || loading}
+                onClick={() => handleConfirmParseYoutube()}
+                className="min-w-[10rem] rounded-lg px-6 text-white shadow-md"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                Parse Video
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {parseCourseModalOpen ? (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+              <h3 className="mb-4 text-xl font-semibold">Create New Course Folder</h3>
+              <Input
+                type="text"
+                value={parseNewCourseName}
+                onChange={(e) => setParseNewCourseName(e.target.value)}
+                placeholder="Course name"
+                className="mb-4 h-11"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleParseCreateCourseFromModal();
+                  }
+                }}
+              />
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  className="flex-1 text-white"
+                  style={{ backgroundColor: 'var(--brand)' }}
+                  onClick={() => void handleParseCreateCourseFromModal()}
+                >
+                  Create
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setParseCourseModalOpen(false);
+                    setParseNewCourseName('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="home-folder-stage">
         <AnimatePresence>
@@ -1886,6 +2158,12 @@ export function Home() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.28 }}
           >
+            <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-3 rounded-lg border border-border bg-muted/35 px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground dark:border-[color-mix(in_srgb,var(--brand)_22%,transparent)] dark:bg-[oklch(0.16_0.02_150/0.55)]">
+              <span>Name</span>
+              <span>Created</span>
+              <span>Type</span>
+              <span className="text-right">Edit</span>
+            </div>
             {!atRoot ? (
               <DotDotFolderRow
                 layout="list"
@@ -2036,6 +2314,16 @@ export function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {videoParsing ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[125] border-t border-[color-mix(in_srgb,var(--brand)_24%,transparent)] bg-card/90 px-4 py-3 text-center text-sm font-medium text-foreground shadow-[0_-8px_32px_rgba(0,0,0,0.12)] backdrop-blur-md dark:bg-[oklch(0.12_0.02_150/0.88)]"
+        >
+          Parsing video…
+        </div>
+      ) : null}
       </div>
     </DndProvider>
   );

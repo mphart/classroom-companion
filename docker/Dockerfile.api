@@ -1,12 +1,17 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY backend/package*.json ./
-RUN npm ci
+# `npm ci` fails on Linux when the lockfile references nested optional deps (e.g. @emnapi/* under
+# @rolldown/binding-wasm32-wasi) without full `packages` entries — common when the lock was
+# generated on Windows. `npm install` reconciles the tree for the build image.
+RUN npm install
 COPY backend/ ./
 RUN npm run build && npm prune --omit=dev
 
 FROM node:20-alpine AS runner
 WORKDIR /app
+RUN apk add --no-cache ffmpeg python3 py3-pip \
+  && pip3 install --break-system-packages --no-cache-dir yt-dlp
 ENV NODE_ENV=production
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules

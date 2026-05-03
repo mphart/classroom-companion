@@ -36,6 +36,7 @@ import {
 import { floatToPCM16 } from '@/app/lib/audioPcm16k';
 import { getSessionUser, getToken } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
+import { CourseFolderSelect } from '@/app/components/CourseFolderSelect';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
 import { buildConfigureMessage, getTranscriptionStreamUrl } from '@/app/lib/transcriptionWs';
 import {
@@ -46,9 +47,6 @@ import {
 } from '@/app/components/TranscriptConfidenceText';
 
 const BUFFER_SIZE = 4096;
-
-/** `<select>` value for saving to your library root (same as Home). */
-const SAVE_TO_HOME_VALUE = '__library_home__';
 
 /** Must match backend `SESSION_QA_TRANSCRIPT_WINDOW` for context sent to Session Q&A. */
 const SESSION_QA_CHAR_WINDOW = 8000;
@@ -844,41 +842,19 @@ export function ActiveRecording() {
             <p className="mt-0.5 mb-2 text-xs text-muted-foreground leading-snug">
               Your Home library or a course folder — one place to choose.
             </p>
-            <select
-              value={
-                saveLocation === 'home'
-                  ? SAVE_TO_HOME_VALUE
-                  : selectedCourse || SAVE_TO_HOME_VALUE
-              }
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === 'create-new') {
-                  setShowCourseModal(true);
-                  return;
-                }
-                if (v === SAVE_TO_HOME_VALUE) {
-                  setSaveLocation('home');
-                  return;
-                }
+            <CourseFolderSelect
+              loadingCourses={loadingCourses}
+              courseFolders={courseFolders}
+              saveLocation={saveLocation}
+              selectedCourse={selectedCourse}
+              onHomeSelect={() => setSaveLocation('home')}
+              onCourseSelect={(name) => {
                 setSaveLocation('course');
-                setSelectedCourse(v);
+                setSelectedCourse(name);
               }}
-              disabled={isRecording || loadingCourses}
-              className="w-full px-3 py-2.5 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2 text-[15px]"
-              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
-            >
-              <optgroup label="Library">
-                <option value={SAVE_TO_HOME_VALUE}>Home</option>
-              </optgroup>
-              <optgroup label={loadingCourses ? 'Folders (loading…)' : 'Course folders'}>
-                {courseFolders.map((folder) => (
-                  <option key={folder.id} value={folder.name}>
-                    {folder.name}
-                  </option>
-                ))}
-              </optgroup>
-              <option value="create-new">+ Create new course folder…</option>
-            </select>
+              onCreateNewRequest={() => setShowCourseModal(true)}
+              disabled={isRecording}
+            />
           </div>
 
           <div>

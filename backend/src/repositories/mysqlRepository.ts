@@ -36,6 +36,7 @@ type NoteRow = RowDataPacket & {
     | "generated_flashcards";
   generated_from_count: number | null;
   pdf_file_path: string | null;
+  youtube_source_url: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -81,6 +82,17 @@ export class MySqlRepository implements Repository {
     if (pdfCols.length === 0) {
       await this.pool.execute(
         `ALTER TABLE notes ADD COLUMN pdf_file_path VARCHAR(600) NULL DEFAULT NULL AFTER generated_from_count`,
+      );
+    }
+
+    const [ytCols] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notes' AND COLUMN_NAME = 'youtube_source_url'
+       LIMIT 1`,
+    );
+    if (ytCols.length === 0) {
+      await this.pool.execute(
+        `ALTER TABLE notes ADD COLUMN youtube_source_url VARCHAR(500) NULL DEFAULT NULL AFTER pdf_file_path`,
       );
     }
   }
@@ -131,6 +143,7 @@ export class MySqlRepository implements Repository {
       sourceType: row.source_type,
       generatedFromCount: row.generated_from_count,
       pdfFilePath: row.pdf_file_path ?? null,
+      youtubeSourceUrl: row.youtube_source_url ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -384,7 +397,7 @@ export class MySqlRepository implements Repository {
   async getNoteById(input: { userId: number; itemId: number }): Promise<{ item: Item; note: Note } | null> {
     const [rows] = await this.pool.execute<(ItemRow & NoteRow)[]>(
       `SELECT i.id, i.user_id, i.type, i.name, i.directory_path, i.created_at, i.updated_at,
-              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.created_at, n.updated_at
+              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.youtube_source_url, n.created_at, n.updated_at
        FROM items i
        INNER JOIN notes n ON n.item_id = i.id
        WHERE i.user_id = ? AND i.id = ? AND i.type = 'note'
@@ -398,7 +411,7 @@ export class MySqlRepository implements Repository {
   async listNotes(input: { userId: number; directoryPath?: string }): Promise<Array<{ item: Item; note: Note }>> {
     const [rows] = await this.pool.execute<(ItemRow & NoteRow)[]>(
       `SELECT i.id, i.user_id, i.type, i.name, i.directory_path, i.created_at, i.updated_at,
-              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.created_at, n.updated_at
+              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.youtube_source_url, n.created_at, n.updated_at
        FROM items i
        INNER JOIN notes n ON n.item_id = i.id
        WHERE i.user_id = ? AND i.type = 'note' AND (? IS NULL OR i.directory_path = ?)

@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "clean:modules": "node scripts/clean-node-modules.cjs",
+    "ci:fresh": "npm run clean:modules && npm ci",
     "dev": "vite",
     "typecheck": "tsc --noEmit"
   },

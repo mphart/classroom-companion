@@ -19,7 +19,9 @@ Default server port is `4000`.
 - `DB_USER=root`
 - `DB_PASSWORD=`
 - `DB_NAME=classroom_companion`
-- **`GEMINI_API_KEY`**: Required for `/ai/summarize/*` and **`POST /ai/session-qa`** (live Session Q&A on the recording screen). Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
+- **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`, **`POST /youtube/parse`** (Gemini summary after transcription), and **`POST /ai/session-qa`** (live Session Q&A on the recording screen). Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
+- **`ASSEMBLYAI_API_KEY`**: Required for **`POST /youtube/parse`** (AssemblyAI transcription of locally downloaded audio — the API never sends the YouTube URL to AssemblyAI). Install **`ffmpeg`** and **`yt-dlp`** on your PATH for local dev (Docker API image installs both). With **`docker compose`**, define this in the **repository root** `.env` (same as `GEMINI_API_KEY`) — `backend/.env` is not mounted into the API container unless you add `env_file` yourself.
+- **`YT_DLP_BIN`** (optional): Override the `yt-dlp` executable name or path if it is not `yt-dlp` on PATH.
 - **`PRACTICE_API_KEY`**: Required for **`/ai/practice-exam/*`** (generate + grade). Uses the same Gemini SDK; keep this key separate from `GEMINI_API_KEY` if you want different quotas/projects. Also loaded from the repo root `.env` after `backend/.env` (see `app.ts`).
 - **`GEMINI_MODEL`** (optional): Defaults to **`gemini-2.5-flash-lite`** (Gemini 2.5 Flash-Lite — higher throughput / more generous limits than full Flash for summarization and practice exams). Override if your project prefers another model (e.g. `gemini-flash-latest`, `gemini-1.5-flash`).
 - **Summarization behavior**: `/ai/summarize/*` instructs Gemini to extract **instructor / professor teaching** from mixed speech-to-text (student chatter and off-topic lines are de-emphasized). This is prompt-based, not true diarization—quality improves if the mic favors the instructor.

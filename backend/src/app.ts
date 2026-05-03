@@ -11,6 +11,7 @@ import { createAuthRoutes } from "./routes/authRoutes";
 import { createFolderRoutes } from "./routes/folderRoutes";
 import { createItemRoutes } from "./routes/itemRoutes";
 import { createNoteRoutes } from "./routes/noteRoutes";
+import { createYoutubeRoutes } from "./routes/youtubeRoutes";
 import path from "path";
 
 dotenv.config();
@@ -29,6 +30,7 @@ export const createApp = (repo: Repository) => {
   app.use("/items", createItemRoutes(repo));
   app.use("/folders", createFolderRoutes(repo));
   app.use("/notes", createNoteRoutes(repo));
+  app.use("/youtube", createYoutubeRoutes(repo));
   app.use("/ai", createAiRoutes(repo));
 
   app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {

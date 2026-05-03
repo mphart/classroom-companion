@@ -41,6 +41,8 @@ export interface Note {
   generatedFromCount: number | null;
   /** Relative path under the uploads root (MySQL); null for non-PDF notes. */
   pdfFilePath: string | null;
+  /** Canonical watch URL when the note was created from YouTube parsing; otherwise null. */
+  youtubeSourceUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,4 +65,5 @@ export interface CreateNoteInput {
   sourceType?: NoteSourceType;
   generatedFromCount?: number | null;
   pdfFilePath?: string | null;
+  youtubeSourceUrl?: string | null;
 }

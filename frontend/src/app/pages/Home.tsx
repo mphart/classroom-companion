@@ -100,6 +100,24 @@ function browseItemLeadingIcon(item: ListedItemDto): ReactNode {
   return <span className="text-2xl leading-none">📄</span>;
 }
 
+function browseItemTypeLabel(item: ListedItemDto): string {
+  if (item.type === 'folder') return 'Folder';
+  switch (item.noteSourceType) {
+    case 'generated_summary':
+      return 'Summary';
+    case 'generated_practice_exam':
+      return 'Practice exam';
+    case 'generated_flashcards':
+      return 'Flashcards';
+    case 'slide_pdf':
+      return 'PDF note';
+    case 'recording':
+      return 'Recording note';
+    default:
+      return 'Note';
+  }
+}
+
 /** Matches backend `items.name` / rename zod schema (`itemRoutes`). */
 const MAX_ITEM_NAME_LENGTH = 120;
 
@@ -252,6 +270,68 @@ function BrowseItemCard({
   onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>;
 }) {
   const { attachRef, isDragging, isOver, canDrop } = useBrowseItemDnD(item, loading, onMoveToFolder);
+
+  if (layout === 'list') {
+    return (
+      <div
+        ref={attachRef}
+        role="button"
+        tabIndex={0}
+        onClick={() => onActivate(item)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onActivate(item);
+          }
+        }}
+        className={cn(
+          'cursor-pointer rounded-lg border border-border bg-card px-3 py-2 transition-colors duration-200 hover:bg-muted/40',
+          'dark:border-[color-mix(in_srgb,var(--brand)_20%,transparent)] dark:bg-[oklch(0.14_0.01_0)] dark:hover:bg-[oklch(0.17_0.02_150)]',
+          selected && 'ring-2',
+          isDragging && 'opacity-60',
+          item.type === 'folder' && isOver && canDrop && 'ring-2 ring-[var(--brand)]',
+        )}
+        style={selected ? ({ '--tw-ring-color': 'var(--brand)' } as CSSProperties) : undefined}
+      >
+        <div className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {selectionMode ? (
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => {}}
+                className="pointer-events-none h-4 w-4 shrink-0"
+                aria-hidden
+              />
+            ) : null}
+            <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
+            <span className="truncate text-sm font-medium">{item.name}</span>
+          </div>
+          <div className="truncate text-xs text-muted-foreground">{formatRelativeDate(item.createdDate)}</div>
+          <div className="truncate text-xs text-muted-foreground">{browseItemTypeLabel(item)}</div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            disabled={loading}
+            aria-label={item.type === 'folder' ? `Rename folder ${item.name}` : `Open ${item.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.type === 'folder') {
+                onRenameFolder(item);
+                return;
+              }
+              onActivate(item);
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <Pencil className="size-4" aria-hidden />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -848,7 +928,11 @@ export function Home() {
         setParseVideoUrl('');
         setParseTitleOverride('');
         await refreshDirectoryItems();
-        toast.success('Video parsed');
+        if (result.summarySkipped) {
+          toast.success('Video parsed', { description: "Can't generate a summary now." });
+        } else {
+          toast.success('Video parsed');
+        }
         navigate(
           { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
           { state: { noteId: result.note.id, browseDirectory: directory } },
@@ -2074,6 +2158,12 @@ export function Home() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.28 }}
           >
+            <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-3 rounded-lg border border-border bg-muted/35 px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground dark:border-[color-mix(in_srgb,var(--brand)_22%,transparent)] dark:bg-[oklch(0.16_0.02_150/0.55)]">
+              <span>Name</span>
+              <span>Created</span>
+              <span>Type</span>
+              <span className="text-right">Edit</span>
+            </div>
             {!atRoot ? (
               <DotDotFolderRow
                 layout="list"

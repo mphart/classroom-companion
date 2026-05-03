@@ -3,6 +3,17 @@ import { SummarizerError } from "./errors";
 
 const CHUNK_CHARS = 48_000;
 
+/** Matches Gemini / Google quota, rate limit, and resource-exhausted style errors. */
+const GEMINI_RATE_OR_QUOTA_RE =
+  /429|Too Many Requests|quota exceeded|Quota exceeded|free_tier|rate.limit|resource.exhausted|RESOURCE_EXHAUSTED/i;
+
+/** True when summarization failed due to rate limits or quota (safe to retry later; transcript-only note is OK). */
+export function isGeminiSummarizeRateLimited(error: unknown): boolean {
+  if (error instanceof SummarizerError && error.statusCode === 429) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return GEMINI_RATE_OR_QUOTA_RE.test(msg);
+}
+
 function getGeminiKey(): string | undefined {
   return (
     process.env.GEMINI_API_KEY?.trim() ||
@@ -134,8 +145,7 @@ Remove redundancy; keep only instructor-relevant content; drop any stray chatter
     if (error instanceof SummarizerError) throw error;
     const raw =
       error instanceof Error && error.message ? `Gemini request failed: ${error.message}` : "Gemini request failed.";
-    const quotaOrRate =
-      /429|Too Many Requests|quota exceeded|Quota exceeded|free_tier|rate.limit/i.test(raw);
+    const quotaOrRate = GEMINI_RATE_OR_QUOTA_RE.test(raw);
     const hint =
       quotaOrRate
         ? " For free tier, try GEMINI_MODEL=gemini-2.5-flash-lite (or gemini-1.5-flash), wait for the retry window, or enable billing. See https://ai.google.dev/gemini-api/docs/rate-limits"

@@ -339,8 +339,8 @@ export async function parseYoutubeVideo(body: {
   language?: string;
   /** Optional note title; server may default from video metadata. */
   title?: string;
-}): Promise<{ note: NoteDto }> {
-  return apiPost('/youtube/parse', body) as Promise<{ note: NoteDto }>;
+}): Promise<{ note: NoteDto; summarySkipped?: boolean }> {
+  return apiPost('/youtube/parse', body) as Promise<{ note: NoteDto; summarySkipped?: boolean }>;
 }
 
 export async function login(body: { username: string; password: string }) {

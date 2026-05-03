@@ -559,6 +559,7 @@ describe("MVP backend routes", () => {
       vi.mocked(parseYoutubePipeline).mockResolvedValue({
         transcriptText: "Hello world from transcript.",
         summaryMarkdown: "## Summary\n\n- Point one",
+        summarySkipped: false,
         durationSeconds: 99,
         noteTitle: "Mock Parsed Title",
         youtubeSourceUrl: "https://www.youtube.com/watch?v=abcd1234567",
@@ -583,6 +584,31 @@ describe("MVP backend routes", () => {
       expect(res.body.note.sourceType).toBe("recording");
       expect(res.body.note.rawText).toContain("Transcript:");
       expect(res.body.note.rawText).toContain("Hello world from transcript.");
+      expect(res.body.summarySkipped).toBeUndefined();
+    });
+
+    it("creates transcript-only note and summarySkipped when Gemini summary is skipped", async () => {
+      vi.mocked(parseYoutubePipeline).mockResolvedValueOnce({
+        transcriptText: "Transcript only.",
+        summaryMarkdown: null,
+        summarySkipped: true,
+        durationSeconds: 42,
+        noteTitle: "Skipped Summary Title",
+        youtubeSourceUrl: "https://www.youtube.com/watch?v=abcd1234567",
+      });
+      const { app, token } = await bootstrap();
+      const res = await request(app)
+        .post("/youtube/parse")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          directory: "1/",
+          language: "English",
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.summarySkipped).toBe(true);
+      expect(res.body.note.aiSummary).toBeNull();
+      expect(res.body.note.rawText).toContain("Transcript only.");
     });
 
     it("rejects invalid YouTube URLs", async () => {

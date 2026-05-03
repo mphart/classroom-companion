@@ -84,7 +84,10 @@ export const createYoutubeRoutes = (repo: Repository): Router => {
         youtubeSourceUrl: parsed.youtubeSourceUrl,
       });
 
-      return res.status(201).json({ note: mapNoteResponse(created)! });
+      return res.status(201).json({
+        note: mapNoteResponse(created)!,
+        ...(parsed.summarySkipped ? { summarySkipped: true as const } : {}),
+      });
     } catch (error) {
       return next(error);
     }

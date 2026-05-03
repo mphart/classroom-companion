@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AssemblyAI } from 'assemblyai';
 import { HttpClientError, SummarizerError } from './errors';
-import { summarizeSourceTexts } from './summary';
+import { isGeminiSummarizeRateLimited, summarizeSourceTexts } from './summary';
 
 export const YOUTUBE_ACCESS_ERROR = 'Could not access the video. Make sure the link is public and try again.';
 export const TRANSCRIPTION_ERROR = 'Transcription failed. Please try again.';
@@ -351,7 +351,10 @@ async function transcribeWithAssemblyAi(filePath: string): Promise<string> {
 
 export type YoutubePipelineResult = {
   transcriptText: string;
-  summaryMarkdown: string;
+  /** AI summary markdown, or `null` when summarization was skipped (e.g. Gemini rate-limited). */
+  summaryMarkdown: string | null;
+  /** True when summary generation was skipped and note should be transcript-only. */
+  summarySkipped: boolean;
   durationSeconds: number;
   noteTitle: string;
   youtubeSourceUrl: string;
@@ -369,18 +372,28 @@ export async function parseYoutubePipeline(opts: {
     await ytDlpDownloadBestAudio(url, tmpRoot, meta.id);
     const audioPath = await resolveDownloadedAudioPath(tmpRoot, meta.id);
     const transcriptText = await transcribeWithAssemblyAi(audioPath);
-    let summaryMarkdown: string;
+    let summaryMarkdown: string | null = null;
+    let summarySkipped = false;
     try {
       summaryMarkdown = await summarizeSourceTexts([transcriptText], {
         outputLanguage: opts.outputLanguage,
       });
     } catch (e) {
-      youtubeParseLog('gemini-summarize-after-transcript-failed', {
-        videoId: meta.id,
-        transcriptChars: transcriptText.length,
-        error: unknownErrorDetail(e),
-      });
-      throw e;
+      if (isGeminiSummarizeRateLimited(e)) {
+        summarySkipped = true;
+        youtubeParseLog('gemini-summarize-skipped-rate-limit', {
+          videoId: meta.id,
+          transcriptChars: transcriptText.length,
+          error: unknownErrorDetail(e),
+        });
+      } else {
+        youtubeParseLog('gemini-summarize-after-transcript-failed', {
+          videoId: meta.id,
+          transcriptChars: transcriptText.length,
+          error: unknownErrorDetail(e),
+        });
+        throw e;
+      }
     }
     const durationSeconds = Math.max(0, Math.floor(Number(meta.duration) || 0));
     const hint = opts.titleOverride?.trim();
@@ -391,6 +404,7 @@ export async function parseYoutubePipeline(opts: {
     return {
       transcriptText,
       summaryMarkdown,
+      summarySkipped,
       durationSeconds,
       noteTitle,
       youtubeSourceUrl,

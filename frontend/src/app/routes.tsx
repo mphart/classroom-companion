@@ -5,6 +5,7 @@ import { Signup } from "./pages/Signup";
 import { Home } from "./pages/Home";
 import { ActiveRecording } from "./pages/ActiveRecording";
 import { Viewer } from "./pages/Viewer";
+import { PracticeExam } from "./pages/PracticeExam";
 
 
 export const router = createBrowserRouter([
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: "/viewer",
         Component: Viewer,
+      },
+      {
+        path: "/practice-exam",
+        Component: PracticeExam,
       },
     ],
   },

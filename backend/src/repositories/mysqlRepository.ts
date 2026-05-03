@@ -12,7 +12,7 @@ type ItemRow = RowDataPacket & {
   directory_path: string;
   created_at: Date;
   updated_at: Date;
-  note_source_type?: "recording" | "generated_summary" | null;
+  note_source_type?: "recording" | "generated_summary" | "generated_practice_exam" | null;
 };
 
 type NoteRow = RowDataPacket & {
@@ -21,7 +21,7 @@ type NoteRow = RowDataPacket & {
   ai_summary: string | null;
   language: string;
   duration_seconds: number;
-  source_type: "recording" | "generated_summary";
+  source_type: "recording" | "generated_summary" | "generated_practice_exam";
   generated_from_count: number | null;
   created_at: Date;
   updated_at: Date;
@@ -29,6 +29,24 @@ type NoteRow = RowDataPacket & {
 
 export class MySqlRepository implements Repository {
   constructor(private readonly pool: Pool) {}
+
+  /**
+   * Extends `notes.source_type` when the DB was created before `generated_practice_exam` existed.
+   * Safe to call on every startup (no-op if already migrated).
+   */
+  async ensureGeneratedPracticeExamEnum(): Promise<void> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notes' AND COLUMN_NAME = 'source_type'
+       LIMIT 1`,
+    );
+    if (rows.length === 0) return;
+    const col = rows[0]?.COLUMN_TYPE;
+    if (typeof col === "string" && col.includes("generated_practice_exam")) return;
+    await this.pool.execute(
+      `ALTER TABLE notes MODIFY COLUMN source_type ENUM('recording', 'generated_summary', 'generated_practice_exam') NOT NULL DEFAULT 'recording'`,
+    );
+  }
 
   static fromEnv(): MySqlRepository {
     const pool = createPool({

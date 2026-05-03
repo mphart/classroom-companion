@@ -95,7 +95,7 @@ export function ActiveRecording() {
   const transcriptPartialPieceRef = useRef<TranscriptRichPiece | null>(null);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (isRecording && !isPaused) {
       interval = setInterval(() => {
         setElapsedTime((prev) => prev + 1);

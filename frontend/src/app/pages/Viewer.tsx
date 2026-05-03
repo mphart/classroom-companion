@@ -92,17 +92,22 @@ export function Viewer() {
   const subtitle =
     note && note.sourceType === 'generated_summary' && typeof note.generatedFromCount === 'number'
       ? `Gemini-generated • merged from ${note.generatedFromCount} source note(s)`
-      : note
-        ? note.sourceType === 'generated_summary'
-          ? 'Gemini-generated summary note'
-          : 'Saved lecture note'
-        : '';
+      : note && note.sourceType === 'generated_practice_exam' && typeof note.generatedFromCount === 'number'
+        ? `Practice exam • from ${note.generatedFromCount} source note(s)`
+        : note
+          ? note.sourceType === 'generated_summary'
+            ? 'Gemini-generated summary note'
+            : note.sourceType === 'generated_practice_exam'
+              ? 'Generated practice exam'
+              : 'Saved lecture note'
+          : '';
 
   const noteKindMeta = useMemo(() => {
     if (!note) return { label: 'Note', Icon: FileText };
     if (note.sourceType === 'generated_summary') return { label: 'AI summary', Icon: Sparkles };
+    if (note.sourceType === 'generated_practice_exam') return { label: 'Practice exam', Icon: BookOpen };
     if (note.sourceType === 'recording') return { label: 'Lecture capture', Icon: Mic };
-    return { label: 'Note', Icon: BookOpen };
+    return { label: 'Note', Icon: FileText };
   }, [note]);
 
   const { Icon: NoteKindIcon, label: noteKindLabel } = noteKindMeta;
@@ -199,6 +204,17 @@ export function Viewer() {
                 {summarizing ? 'Generating…' : 'Summarize with Gemini'}
               </button>
             ) : null}
+            {note?.sourceType === 'generated_practice_exam' && noteId !== undefined ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                className="rounded-lg px-4 py-2 text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                Open practice exam
+              </button>
+            ) : null}
             {sessionUser ? (
               <span className="hidden rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground sm:inline">
                 @{sessionUser.username}
@@ -228,7 +244,23 @@ export function Viewer() {
                     </p>
                     <h1 className="mt-1 text-3xl font-semibold tracking-tight">{note.title}</h1>
                   </div>
-                  {note.sourceType === 'generated_summary' ? (
+                  {note.sourceType === 'generated_practice_exam' ? (
+                    <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-8 text-center">
+                      <p className="text-muted-foreground">
+                        This item is an interactive practice exam. Open it to answer questions and check your work.
+                      </p>
+                      {noteId !== undefined ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                          className="rounded-lg px-6 py-2.5 text-white"
+                          style={{ backgroundColor: 'var(--brand)' }}
+                        >
+                          Open practice exam
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : note.sourceType === 'generated_summary' ? (
                     <div>
                       <h2 className="mb-3 text-2xl">AI summary</h2>
                       <div className="rounded-lg border border-border bg-muted/20 p-6">

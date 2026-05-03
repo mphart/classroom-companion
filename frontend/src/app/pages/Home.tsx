@@ -16,13 +16,14 @@ import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
   deleteItems,
+  generatePracticeExam,
   listItems,
   renameItem,
   summarizeSelection,
   type ListedItemDto,
 } from '@/app/lib/api';
 import { Button } from '@/app/components/ui/button';
-import { cn } from '@/app/components/ui/utils';
+import { Checkbox } from '@/app/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,8 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
+import { Label } from '@/app/components/ui/label';
+import { cn } from '@/app/components/ui/utils';
 import { clearSession, getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
 import {
@@ -111,7 +114,9 @@ function BrowseItemCard({
                   ? '📁'
                   : item.noteSourceType === 'generated_summary'
                     ? '🧠'
-                    : '📄'}
+                    : item.noteSourceType === 'generated_practice_exam'
+                      ? '📝'
+                      : '📄'}
               </span>
               <h3 className="truncate text-sm">{item.name}</h3>
             </div>
@@ -159,6 +164,11 @@ export function Home() {
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [examDialogOpen, setExamDialogOpen] = useState(false);
+  const [examIncludeMc, setExamIncludeMc] = useState(true);
+  const [examIncludeSa, setExamIncludeSa] = useState(true);
+  const [examQuestionCount, setExamQuestionCount] = useState(5);
+  const [examOther, setExamOther] = useState('');
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameInput, setRenameInput] = useState('');
   const [renameFieldError, setRenameFieldError] = useState('');
@@ -317,6 +327,52 @@ export function Home() {
       await loadItems();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeneratePracticeExam = async () => {
+    if (!userRoot || selectedItems.size === 0) return;
+    if (!examIncludeMc && !examIncludeSa) {
+      setError('Choose at least one question type.');
+      return;
+    }
+    const count = Math.min(30, Math.max(1, Math.floor(Number(examQuestionCount)) || 0));
+    if (count < 1) {
+      setError('Question count must be between 1 and 30.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    const selected = items.filter((item) => selectedItems.has(item.id));
+    const noteIds = selected.filter((item) => item.type === 'note').map((item) => item.id);
+    const folderIds = selected.filter((item) => item.type === 'folder').map((item) => item.id);
+
+    try {
+      const titleSeed = `Practice Exam ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+      const title = titleSeed.length > 160 ? titleSeed.slice(0, 160) : titleSeed;
+
+      const result = await generatePracticeExam({
+        noteIds,
+        folderIds,
+        outputDirectory: userRoot,
+        title,
+        questionCount: count,
+        includeMultipleChoice: examIncludeMc,
+        includeShortAnswer: examIncludeSa,
+        otherInstructions: examOther.trim() || undefined,
+      });
+
+      setExamDialogOpen(false);
+      setCurrentDirectory(userRoot);
+      setSelectedItems(new Set());
+      setSelectionMode(false);
+      navigate('/practice-exam', { state: { noteId: result.note.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate practice exam');
     } finally {
       setLoading(false);
     }
@@ -757,6 +813,80 @@ export function Home() {
           </div>
         </div>
 
+        <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">AI Summary &amp; practice exams:</span> Summaries use{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_API_KEY</code>; practice exams use{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">PRACTICE_API_KEY</code> (both in{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">backend/.env</code> or Compose; optional{' '}
+          <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_MODEL</code>). Turn on Select mode, pick notes
+          and/or folders (folders include all notes inside), then generate a summary or a practice exam.
+        </div>
+
+        <Dialog open={examDialogOpen} onOpenChange={setExamDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Generate Exam Prep</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="exam-mc"
+                  checked={examIncludeMc}
+                  onCheckedChange={(v) => setExamIncludeMc(v === true)}
+                />
+                <Label htmlFor="exam-mc" className="cursor-pointer font-normal">
+                  Multiple Choice
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="exam-sa"
+                  checked={examIncludeSa}
+                  onCheckedChange={(v) => setExamIncludeSa(v === true)}
+                />
+                <Label htmlFor="exam-sa" className="cursor-pointer font-normal">
+                  Short answers
+                </Label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="exam-other-input" className="font-normal">
+                  Other
+                </Label>
+                <Input
+                  id="exam-other-input"
+                  placeholder="Custom instructions (optional)"
+                  value={examOther}
+                  onChange={(e) => setExamOther(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="exam-count">Question count</Label>
+                <Input
+                  id="exam-count"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={examQuestionCount}
+                  onChange={(e) => setExamQuestionCount(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-center">
+              <button
+                type="button"
+                disabled={
+                  loading || (!examIncludeMc && !examIncludeSa) || examQuestionCount < 1 || examQuestionCount > 30
+                }
+                onClick={() => void handleGeneratePracticeExam()}
+                className="rounded-lg px-6 py-2 text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                {loading ? 'Generating…' : 'Generate'}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <AnimatePresence>
           {selectionMode && selectedItems.size > 0 ? (
             <motion.div
@@ -771,7 +901,7 @@ export function Home() {
                 type="button"
                 onClick={() => void handleGenerateSummary()}
                 disabled={loading}
-                className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand)' }}
                 onMouseEnter={(e) =>
                   loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
@@ -785,9 +915,25 @@ export function Home() {
               </motion.button>
               <motion.button
                 type="button"
+                onClick={() => setExamDialogOpen(true)}
+                disabled={loading}
+                className="rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+                onMouseEnter={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                }
+                onMouseLeave={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                }
+                whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+              >
+                Generate practice exam
+              </motion.button>
+              <motion.button
+                type="button"
                 onClick={() => void handleDelete()}
                 disabled={loading}
-                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:opacity-90 disabled:opacity-50"
                 whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
               >
                 Delete
@@ -919,7 +1065,9 @@ export function Home() {
                               ? '📁'
                               : item.noteSourceType === 'generated_summary'
                                 ? '🧠'
-                                : '📄';
+                                : item.noteSourceType === 'generated_practice_exam'
+                                  ? '📝'
+                                  : '📄';
                           return (
                             <div
                               key={item.id}

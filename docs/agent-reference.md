@@ -47,7 +47,8 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 | --- | --- |
 | `JWT_SECRET` | JWT signing (override default in production) |
 | `JWT_EXPIRES_IN` | Optional |
-| `GEMINI_API_KEY` | Summarization (`/ai/*`); optional alias may be documented in code |
+| `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`); optional alias may be documented in code |
+| `PRACTICE_API_KEY` | Gemini key for practice exam **generate** and **grade** (`/ai/practice-exam/*`); separate from `GEMINI_API_KEY` |
 | `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-flash-latest` |
 | `DEEPGRAM_API_KEY` | Live STT (English) on `/transcription/stream` |
 | `GLADIO_API_KEY` | Gladia live translation for non‑English recording languages (alias `GLADIA_API_KEY`) |
@@ -56,7 +57,7 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 
 ### Local backend (`backend/.env`)
 
-Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GLADIO_API_KEY`, `GEMINI_*` as needed.
+Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GLADIO_API_KEY` (Gladia), `GEMINI_*`, and **`PRACTICE_API_KEY`** for practice exams (or rely on repo root `.env`, which is loaded after `backend/.env` for missing keys).
 
 ### Frontend build-time (`VITE_*`)
 

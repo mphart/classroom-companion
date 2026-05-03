@@ -20,7 +20,7 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `GET /items?directory=userId/physics/&q=chapter&sortBy=lastEditedDate&sortDir=desc`
   - Response `200`:
     - `{ "items": [{ "id": 9, "type": "note", "name": "Lecture 3", "directory": "userId/physics/", "createdDate": "...", "lastEditedDate": "...", "noteSourceType": "recording" }] }`
-      - `noteSourceType` is only included for `note` items (`recording` vs `generated_summary`)
+      - `noteSourceType` is only included for `note` items (`recording`, `generated_summary`, or `generated_practice_exam`)
 - `POST /folders`
   - Request: `{ "name": "Physics", "directory": "userId/" }`
   - Response `201`: `{ "item": { "id": 3, "type": "folder", "name": "Physics", "directory": "userId/", "createdDate": "...", "lastEditedDate": "..." } }`
@@ -50,6 +50,22 @@ All protected routes require `Authorization: Bearer <jwt>`.
   - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary", "outputLanguage"?: "Spanish" }` — optional **`outputLanguage`** overrides inference; if omitted and **every** source note shares the same `language`, Gemini uses that language and the new note’s `language` field is set accordingly (otherwise defaults to English).
   - Response `201`: `{ "note": { ...sourceType: "generated_summary"... }, "sourceCount": 5 }`
   - Single-note summarize uses the stored note’s `language` field to steer Gemini output.
+
+## Practice exams (Gemini)
+
+Server uses **`PRACTICE_API_KEY`** (not `GEMINI_API_KEY`) for generate and grade. Same `GEMINI_MODEL` applies unless you add a separate model later.
+
+- `POST /ai/practice-exam/generate`
+  - Request:
+    - `{ "noteIds": [1], "folderIds": [2], "outputDirectory": "userId/", "title": "Unit 2 Quiz", "questionCount": 10, "includeMultipleChoice": true, "includeShortAnswer": true, "otherInstructions": "Focus on definitions" }`
+    - At least one of `includeMultipleChoice` / `includeShortAnswer` must be true. `questionCount` is 1–30.
+  - Response `201`: `{ "note": { ...sourceType: "generated_practice_exam", "rawText": "<JSON exam document>", ... }, "sourceCount": 5 }`
+  - The note’s `rawText` is a JSON object: `{ "version": 1, "title": string, "questions": [ ... ] }` with each question either `multiple_choice` (`prompt`, `options`, `correctIndex`, optional `explanation`) or `short_answer` (`prompt`, `referenceAnswer`).
+
+- `POST /ai/practice-exam/grade`
+  - Request: `{ "noteId": 42, "responses": [ { "questionIndex": 3, "answer": "student text" } ] }` — only indices that refer to `short_answer` questions in that note.
+  - Response `200`: `{ "results": [ { "questionIndex": 3, "verdict": "correct" | "partial" | "incorrect", "feedback": "..." } ] }`
+  - Returns `400` if the note is not a practice exam or an index is not a short-answer question.
 
 ## Realtime Speech-to-Text (WebSocket)
 

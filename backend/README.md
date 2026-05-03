@@ -20,6 +20,7 @@ Default server port is `4000`.
 - `DB_PASSWORD=`
 - `DB_NAME=classroom_companion`
 - **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`. Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
+- **`PRACTICE_API_KEY`**: Required for **`/ai/practice-exam/*`** (generate + grade). Uses the same Gemini SDK; keep this key separate from `GEMINI_API_KEY` if you want different quotas/projects. Also loaded from the repo root `.env` after `backend/.env` (see `app.ts`).
 - **`GEMINI_MODEL`** (optional): Defaults to `gemini-flash-latest` (matches `v1beta/models/gemini-flash-latest`). Override if your project’s quota works better on another model (e.g. `gemini-1.5-flash`).
 - **Summarization behavior**: `/ai/summarize/*` instructs Gemini to extract **instructor / professor teaching** from mixed speech-to-text (student chatter and off-topic lines are de-emphasized). This is prompt-based, not true diarization—quality improves if the mic favors the instructor.
 - **`DEEPGRAM_API_KEY`**: Required for **`/transcription/stream`** when the client configures language **`en`** (Deepgram realtime STT, including per-word confidence when `words=true`).

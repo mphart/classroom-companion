@@ -5,6 +5,14 @@ import { FolderOpen, Languages, Mic, Sparkles } from 'lucide-react';
 import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
+import {
+  extractImportantDatesFromTranscript,
+  extractTranscriptSection,
+} from '@/app/lib/extractImportantDatesFromTranscript';
+import {
+  appendImportantEventsFromRecording,
+  queueImportantAlertsForHome,
+} from '@/app/lib/importantEventsStorage';
 import { floatToPCM16 } from '@/app/lib/audioPcm16k';
 import { getSessionUser, getToken } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
@@ -429,13 +437,21 @@ export function ActiveRecording() {
     ].join('\n');
 
     try {
-      await createNote({
+      const saved = await createNote({
         title: lectureName.trim(),
         directory,
         rawText,
         language,
         durationSeconds: elapsedTime,
       });
+      try {
+        const transcriptOnly = extractTranscriptSection(rawText);
+        const mentions = extractImportantDatesFromTranscript(transcriptOnly, new Date());
+        const added = appendImportantEventsFromRecording(saved.id, saved.title, mentions);
+        queueImportantAlertsForHome(added);
+      } catch {
+        /* best-effort: still go home if local storage or parsing fails */
+      }
       navigate('/home');
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Failed to save recording');

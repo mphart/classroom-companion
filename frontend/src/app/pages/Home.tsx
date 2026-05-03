@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
+  Bell,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -41,6 +42,11 @@ import { Label } from '@/app/components/ui/label';
 import { cn } from '@/app/components/ui/utils';
 import { clearSession, getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
+import {
+  consumePendingImportantAlerts,
+  loadImportantEvents,
+  type StoredImportantEvent,
+} from '@/app/lib/importantEventsStorage';
 import {
   joinDirectory,
   parentDirectory,
@@ -344,8 +350,42 @@ function CalendarItemBar({
   );
 }
 
+function formatImportantDayLabel(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map((x) => Number.parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateKey;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function ImportantCalendarPill({
+  ev,
+  loading,
+  onOpenNote,
+}: {
+  ev: StoredImportantEvent;
+  loading: boolean;
+  onOpenNote: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={loading}
+      title={ev.snippet}
+      onClick={onOpenNote}
+      className="flex min-w-0 max-w-full items-center gap-0.5 rounded-md border border-amber-300/80 bg-amber-100/90 px-1 py-0.5 text-left text-[0.65rem] leading-tight text-amber-950 hover:bg-amber-200/90 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-50 dark:hover:bg-amber-900/50"
+    >
+      <Bell className="size-2.5 shrink-0" aria-hidden />
+      <span className="min-w-0 truncate">{ev.title}</span>
+    </button>
+  );
+}
+
 export function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const reduceMotion = useReducedMotion();
   const sessionUser = getSessionUser();
 
@@ -379,10 +419,23 @@ export function Home() {
   const [showCalendarFolders, setShowCalendarFolders] = useState(true);
   const [showCalendarNotes, setShowCalendarNotes] = useState(true);
   const [showCalendarSummaries, setShowCalendarSummaries] = useState(true);
+  const [showCalendarImportant, setShowCalendarImportant] = useState(true);
+  const [importantEvents, setImportantEvents] = useState<StoredImportantEvent[]>(() => loadImportantEvents());
+  const [importantAlertOpen, setImportantAlertOpen] = useState(false);
+  const [importantAlertList, setImportantAlertList] = useState<StoredImportantEvent[]>([]);
 
   useEffect(() => {
     setCurrentDirectory(userRoot);
   }, [userRoot]);
+
+  useEffect(() => {
+    const pending = consumePendingImportantAlerts();
+    setImportantEvents(loadImportantEvents());
+    if (pending.length > 0) {
+      setImportantAlertList(pending);
+      setImportantAlertOpen(true);
+    }
+  }, [location.key]);
 
   const sortApi = useMemo(() => {
     if (sortBy === 'name') return { sortBy: 'name' as const, sortDir: 'asc' as const };
@@ -508,6 +561,25 @@ export function Home() {
     }
     return record;
   }, [calendarFilteredItems]);
+
+  const importantByDay = useMemo(() => {
+    if (!showCalendarImportant) return {} as Record<string, StoredImportantEvent[]>;
+    const y = calendarVisibleMonth.getFullYear();
+    const m = calendarVisibleMonth.getMonth();
+    const out: Record<string, StoredImportantEvent[]> = {};
+    for (const ev of importantEvents) {
+      const parts = ev.dateKey.split('-').map((v) => Number.parseInt(v, 10));
+      const [ey, em] = parts;
+      if (!Number.isFinite(ey) || !Number.isFinite(em)) continue;
+      if (ey !== y || em - 1 !== m) continue;
+      if (!out[ev.dateKey]) out[ev.dateKey] = [];
+      out[ev.dateKey].push(ev);
+    }
+    for (const k of Object.keys(out)) {
+      out[k].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return out;
+  }, [importantEvents, calendarVisibleMonth, showCalendarImportant]);
 
   const atRoot = userRoot !== null && currentDirectory === userRoot;
 
@@ -1064,13 +1136,51 @@ export function Home() {
         </div>
 
         <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">AI Summary &amp; practice exams:</span> Summaries use{' '}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_API_KEY</code>; practice exams use{' '}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">PRACTICE_API_KEY</code> (both in{' '}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">backend/.env</code> or Compose; optional{' '}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_MODEL</code>). Turn on Select mode, pick notes
-          and/or folders (folders include all notes inside), then generate a summary or a practice exam.
+          <span className="font-medium text-foreground">Tip:</span> Turn on <span className="text-foreground">Select</span>, pick
+          notes and/or folders (folders include everything inside), then generate a combined summary or practice exam.
+          When you finish a recording, we scan the transcript for exams or due dates and can show them on the calendar
+          below.
         </div>
+
+        <Dialog open={importantAlertOpen} onOpenChange={setImportantAlertOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Important dates from your lecture</DialogTitle>
+              <DialogDescription>
+                We noticed possible exams or deadlines in your latest recording. They are on your calendar (bell
+                markers). Dates are best-effort from the transcript—double-check with your syllabus.
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="max-h-[50vh] space-y-3 overflow-y-auto py-1 text-sm">
+              {importantAlertList.map((ev) => (
+                <li key={ev.id} className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                  <div className="font-medium text-foreground">
+                    {ev.title} · {formatImportantDayLabel(ev.dateKey)}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{ev.snippet}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setImportantAlertOpen(false);
+                        navigate({ pathname: '/viewer', search: `?noteId=${String(ev.noteId)}` }, { state: { noteId: ev.noteId } });
+                      }}
+                    >
+                      Open note
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <DialogFooter>
+              <Button type="button" onClick={() => setImportantAlertOpen(false)}>
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={examDialogOpen} onOpenChange={setExamDialogOpen}>
           <DialogContent className="sm:max-w-md">
@@ -1229,6 +1339,15 @@ export function Home() {
                   />
                   Summaries
                 </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarImportant}
+                    onChange={(e) => setShowCalendarImportant(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Important dates
+                </label>
               </div>
               {!atRoot ? (
                 <div className="mt-4">
@@ -1311,6 +1430,7 @@ export function Home() {
                   }
                   const dayKey = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                   const dayItems = calendarItemsByDay[dayKey] ?? [];
+                  const importantForDay = importantByDay[dayKey] ?? [];
                   return (
                     <div
                       key={dayKey}
@@ -1320,6 +1440,19 @@ export function Home() {
                         {day}
                       </span>
                       <div className="flex max-h-28 min-h-0 flex-col gap-1 overflow-y-auto">
+                        {importantForDay.map((ev) => (
+                          <ImportantCalendarPill
+                            key={ev.id}
+                            ev={ev}
+                            loading={loading}
+                            onOpenNote={() =>
+                              navigate(
+                                { pathname: '/viewer', search: `?noteId=${String(ev.noteId)}` },
+                                { state: { noteId: ev.noteId } },
+                              )
+                            }
+                          />
+                        ))}
                         {dayItems.map((item) => (
                           <CalendarItemBar
                             key={item.id}

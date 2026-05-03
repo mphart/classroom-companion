@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Calendar, ChevronLeft, ChevronRight, Clipboard, LayoutGrid, Pencil } from 'lucide-react';
+import '@/styles/brand-ambient.css';
 import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
@@ -76,7 +78,7 @@ function BrowseItemCard({
         }
       }}
       className={cn(
-        'cursor-pointer rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md',
+        'cursor-pointer rounded-lg border border-border bg-card p-4 transition-all duration-300 ease-out will-change-transform hover:-translate-y-0.5 hover:shadow-lg',
         layout === 'list' && 'w-full',
         selected && 'ring-2',
       )}
@@ -130,6 +132,7 @@ function BrowseItemCard({
 
 export function Home() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const sessionUser = getSessionUser();
 
   const userId = sessionUser?.id;
@@ -426,14 +429,35 @@ export function Home() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="border-b border-border bg-card">
+    <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
+        <div
+          className="brand-ambient-blob-a absolute -left-[15%] -top-[28%] h-[min(56vw,28rem)] w-[min(56vw,28rem)] rounded-full bg-[var(--brand)] opacity-[0.14] blur-[4.5rem] dark:opacity-[0.19]"
+          style={{ animationDelay: '-2.5s' }}
+        />
+        <div
+          className="brand-ambient-blob-b absolute -right-[12%] top-[18%] h-[min(50vw,26rem)] w-[min(50vw,26rem)] rounded-full bg-[var(--brand-deep)] opacity-[0.11] blur-[4rem] dark:opacity-[0.16]"
+          style={{ animationDelay: '-6s' }}
+        />
+        <div
+          className="brand-ambient-blob-c absolute bottom-[-18%] left-[20%] h-[min(62vw,32rem)] w-[min(62vw,32rem)] rounded-full bg-[var(--brand)] opacity-[0.1] blur-[5rem] dark:opacity-[0.14]"
+          style={{ animationDelay: '-1s' }}
+        />
+      </div>
+
+      <motion.div
+        initial={reduceMotion ? false : { opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        className="border-b border-border bg-card"
+      >
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 rounded-md" />
               <div className="relative">
-                <button
+                <motion.button
+                  type="button"
                   onClick={() => setShowNewMenu(!showNewMenu)}
                   disabled={loading}
                   className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
@@ -444,9 +468,10 @@ export function Home() {
                   onMouseLeave={(e) =>
                     loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
                   }
+                  whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
                 >
                   + New
-                </button>
+                </motion.button>
                 {showNewMenu && (
                   <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-56 z-10">
                     <button
@@ -470,13 +495,15 @@ export function Home() {
             </div>
 
             <div className="relative flex items-center gap-3">
-              <button
+              <motion.button
+                type="button"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="w-10 h-10 rounded-full text-white flex items-center justify-center"
                 style={{ backgroundColor: 'var(--brand)' }}
+                whileTap={reduceMotion ? undefined : { scale: 0.94 }}
               >
                 U
-              </button>
+              </motion.button>
               {showProfileMenu && (
                 <div className="absolute top-full right-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-40 z-10">
                   <button
@@ -490,13 +517,18 @@ export function Home() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <motion.div
+            className="flex items-center gap-4"
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: reduceMotion ? 0 : 0.08, ease: [0.22, 1, 0.36, 1] }}
+          >
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-4 py-2 border border-border bg-background rounded-lg focus:outline-none focus:ring-2"
+              className="flex-1 px-4 py-2 border border-border bg-background rounded-lg focus:outline-none focus:ring-2 transition-shadow duration-300 focus:shadow-md"
               style={{ '--tw-ring-color': 'var(--brand)' } as CSSProperties}
             />
             <div className="relative">
@@ -538,11 +570,16 @@ export function Home() {
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <motion.div
+        className="max-w-7xl mx-auto px-6 py-8"
+        initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: reduceMotion ? 0 : 0.12, ease: [0.22, 1, 0.36, 1] }}
+      >
         {error ? (
           <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
@@ -551,71 +588,92 @@ export function Home() {
 
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3 flex-wrap">
-            <button
+            <motion.button
+              type="button"
               onClick={goUpOneLevel}
               disabled={atRoot || loading}
-              className="px-3 py-2 border border-border rounded-lg disabled:opacity-50"
+              className="px-3 py-2 border border-border rounded-lg transition-shadow duration-300 disabled:opacity-50 hover:shadow-md"
+              whileTap={reduceMotion || atRoot || loading ? undefined : { scale: 0.97 }}
             >
               Back
-            </button>
-            <h1 className="text-2xl">{pathSegments.join(' / ')}</h1>
-            {loading ? <span className="text-sm text-muted-foreground">Loading…</span> : null}
+            </motion.button>
+            <motion.h1
+              className="text-2xl"
+              initial={reduceMotion ? false : { opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              key={pathSegments.join('/')}
+            >
+              {pathSegments.join(' / ')}
+            </motion.h1>
+            {loading ? (
+              <motion.span
+                className="text-sm text-muted-foreground"
+                animate={reduceMotion ? undefined : { opacity: [0.4, 1, 0.4] }}
+                transition={reduceMotion ? undefined : { duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                Loading…
+              </motion.span>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div
               role="radiogroup"
               aria-label="Browse layout"
-              className="inline-flex divide-x divide-border overflow-hidden rounded-md border border-border bg-card"
+              className="inline-flex divide-x divide-border overflow-hidden rounded-md border border-border bg-card shadow-sm"
             >
-              <button
+              <motion.button
                 type="button"
                 role="radio"
                 aria-checked={fileViewMode === 'list'}
                 aria-label="List view"
                 onClick={() => setFileViewMode('list')}
                 className={cn(
-                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
+                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors duration-200 sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   fileViewMode === 'list'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
+                whileTap={reduceMotion ? undefined : { scale: 0.94 }}
               >
                 <Clipboard className="size-4 shrink-0" aria-hidden />
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
                 role="radio"
                 aria-checked={fileViewMode === 'group'}
                 aria-label="Grid view"
                 onClick={() => setFileViewMode('group')}
                 className={cn(
-                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
+                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors duration-200 sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   fileViewMode === 'group'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
+                whileTap={reduceMotion ? undefined : { scale: 0.94 }}
               >
                 <LayoutGrid className="size-4 shrink-0" aria-hidden />
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
                 role="radio"
                 aria-checked={fileViewMode === 'calendar'}
                 aria-label="Calendar view"
                 onClick={() => setFileViewMode('calendar')}
                 className={cn(
-                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
+                  'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors duration-200 sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   fileViewMode === 'calendar'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
+                whileTap={reduceMotion ? undefined : { scale: 0.94 }}
               >
                 <Calendar className="size-4 shrink-0" aria-hidden />
-              </button>
+              </motion.button>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2">
@@ -633,34 +691,52 @@ export function Home() {
           </div>
         </div>
 
-        {selectionMode && selectedItems.size > 0 && (
-          <div className="mb-6 flex items-center gap-3">
-            <button
-              onClick={() => void handleGenerateSummary()}
-              disabled={loading}
-              className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
-              style={{ backgroundColor: 'var(--brand)' }}
-              onMouseEnter={(e) =>
-                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
-              }
-              onMouseLeave={(e) =>
-                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
-              }
+        <AnimatePresence>
+          {selectionMode && selectedItems.size > 0 ? (
+            <motion.div
+              key="home-selection-actions"
+              className="mb-6 flex flex-wrap items-center gap-3"
+              initial={reduceMotion ? false : { opacity: 0, y: -12, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -10, filter: 'blur(4px)' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             >
-              Generate AI Summary
-            </button>
-            <button
-              onClick={() => void handleDelete()}
-              disabled={loading}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 disabled:opacity-50"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+              <motion.button
+                type="button"
+                onClick={() => void handleGenerateSummary()}
+                disabled={loading}
+                className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+                onMouseEnter={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                }
+                onMouseLeave={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                }
+                whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+              >
+                Generate AI Summary
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={loading}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 disabled:opacity-50"
+                whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+              >
+                Delete
+              </motion.button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {fileViewMode === 'calendar' ? (
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <motion.div
+            className="flex flex-col gap-6 lg:flex-row lg:items-start"
+            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          >
             <aside className="shrink-0 rounded-lg border border-border bg-card px-4 py-3 lg:w-52">
               <p className="mb-3 text-sm font-medium text-foreground">Show</p>
               <div className="flex flex-col gap-2 text-sm">
@@ -839,51 +915,93 @@ export function Home() {
                 </div>
               ) : null}
             </div>
-          </div>
+          </motion.div>
         ) : fileViewMode === 'list' ? (
-          <div className="flex flex-col gap-2">
-            {items.map((item) => (
-              <BrowseItemCard
+          <motion.div
+            className="flex flex-col gap-2"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.28 }}
+          >
+            {items.map((item, i) => (
+              <motion.div
                 key={item.id}
-                item={item}
-                layout="list"
-                selectionMode={selectionMode}
-                selected={selectedItems.has(item.id)}
-                loading={loading}
-                formatRelativeDate={formatRelativeDate}
-                onActivate={handleItemClick}
-                onRenameFolder={openRenameFolderDialog}
-              />
+                initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 430,
+                  damping: 34,
+                  delay: reduceMotion ? 0 : Math.min(i * 0.045, 0.48),
+                }}
+              >
+                <BrowseItemCard
+                  item={item}
+                  layout="list"
+                  selectionMode={selectionMode}
+                  selected={selectedItems.has(item.id)}
+                  loading={loading}
+                  formatRelativeDate={formatRelativeDate}
+                  onActivate={handleItemClick}
+                  onRenameFolder={openRenameFolderDialog}
+                />
+              </motion.div>
             ))}
             {!loading && items.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
+              <motion.div
+                className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              >
                 No files or folders in this location.
-              </div>
+              </motion.div>
             ) : null}
-          </div>
+          </motion.div>
         ) : (
-          <div className="grid grid-cols-4 gap-4">
-            {items.map((item) => (
-              <BrowseItemCard
+          <motion.div
+            className="grid grid-cols-4 gap-4"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.28 }}
+          >
+            {items.map((item, i) => (
+              <motion.div
                 key={item.id}
-                item={item}
-                layout="group"
-                selectionMode={selectionMode}
-                selected={selectedItems.has(item.id)}
-                loading={loading}
-                formatRelativeDate={formatRelativeDate}
-                onActivate={handleItemClick}
-                onRenameFolder={openRenameFolderDialog}
-              />
+                initial={reduceMotion ? false : { opacity: 0, y: 22, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 400,
+                  damping: 30,
+                  delay: reduceMotion ? 0 : Math.min(i * 0.055, 0.55),
+                }}
+              >
+                <BrowseItemCard
+                  item={item}
+                  layout="group"
+                  selectionMode={selectionMode}
+                  selected={selectedItems.has(item.id)}
+                  loading={loading}
+                  formatRelativeDate={formatRelativeDate}
+                  onActivate={handleItemClick}
+                  onRenameFolder={openRenameFolderDialog}
+                />
+              </motion.div>
             ))}
             {!loading && items.length === 0 ? (
-              <div className="col-span-4 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
+              <motion.div
+                className="col-span-4 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground"
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              >
                 No files or folders in this location.
-              </div>
+              </motion.div>
             ) : null}
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
       <Dialog
         open={renameOpen}

@@ -246,4 +246,174 @@ describe("MVP backend routes", () => {
     expect(grade.body.results[0].questionIndex).toBe(saIndex);
     expect(["correct", "partial", "incorrect"]).toContain(grade.body.results[0].verdict);
   });
+
+  it("moves a note into a folder", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Physics",
+      directory: "1/",
+    });
+    const noteRes = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Lecture",
+      directory: "1/",
+      rawText: "Hi",
+      language: "English",
+      durationSeconds: 1,
+    });
+    const noteItemId = noteRes.body.note.id as number;
+    const move = await request(app)
+      .patch(`/items/${noteItemId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/Physics/" });
+    expect(move.status).toBe(200);
+    expect(move.body.item.directory).toBe("1/Physics/");
+  });
+
+  it("moves a folder and updates paths of nested notes", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Outer",
+      directory: "1/",
+    });
+    await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "N1",
+      directory: "1/Outer/",
+      rawText: "x",
+      language: "English",
+      durationSeconds: 1,
+    });
+    const listRoot = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" });
+    const outerId = listRoot.body.items.find((i: { name: string }) => i.name === "Outer").id as number;
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Inbox",
+      directory: "1/",
+    });
+    const listRoot2 = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" });
+    const inboxId = listRoot2.body.items.find((i: { name: string }) => i.name === "Inbox").id as number;
+    const move = await request(app)
+      .patch(`/items/${outerId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/Inbox/" });
+    expect(move.status).toBe(200);
+    const insideInbox = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/Inbox/Outer/" });
+    expect(insideInbox.status).toBe(200);
+    expect(insideInbox.body.items.some((i: { name: string }) => i.name === "N1")).toBe(true);
+    expect(inboxId).toBeDefined();
+  });
+
+  it("rejects move when a name already exists in the target folder", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Box",
+      directory: "1/",
+    });
+    await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Dup",
+      directory: "1/",
+      rawText: "a",
+      language: "English",
+      durationSeconds: 1,
+    });
+    await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Dup",
+      directory: "1/Box/",
+      rawText: "b",
+      language: "English",
+      durationSeconds: 1,
+    });
+    const list = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" });
+    const rootDupId = list.body.items.find((i: { name: string; type: string }) => i.name === "Dup" && i.type === "note").id;
+    const move = await request(app)
+      .patch(`/items/${rootDupId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/Box/" });
+    expect(move.status).toBe(409);
+  });
+
+  it("rejects moving a folder into itself or its descendant", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "P",
+      directory: "1/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Q",
+      directory: "1/P/",
+    });
+    const pId = (await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" })).body.items.find(
+      (i: { name: string }) => i.name === "P",
+    ).id;
+    const bad = await request(app)
+      .patch(`/items/${pId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/P/Q/" });
+    expect(bad.status).toBe(400);
+  });
+
+  it("rejects creating a folder inside the innermost allowed folder", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "A",
+      directory: "1/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "B",
+      directory: "1/A/",
+    });
+    const deep = await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "C",
+      directory: "1/A/B/",
+    });
+    expect(deep.status).toBe(400);
+  });
+
+  it("rejects moving a folder into the innermost folder", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "A",
+      directory: "1/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "B",
+      directory: "1/A/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "X",
+      directory: "1/",
+    });
+    const rootItems = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" });
+    const xId = rootItems.body.items.find((i: { name: string }) => i.name === "X").id as number;
+    const move = await request(app)
+      .patch(`/items/${xId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/A/B/" });
+    expect(move.status).toBe(400);
+  });
+
+  it("rejects moving a folder tree that would create a third folder level", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "M",
+      directory: "1/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "S",
+      directory: "1/M/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "A",
+      directory: "1/",
+    });
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "B",
+      directory: "1/A/",
+    });
+    const rootItems = await request(app).get("/items").set("Authorization", `Bearer ${token}`).query({ directory: "1/" });
+    const mId = rootItems.body.items.find((i: { name: string }) => i.name === "M").id as number;
+    const move = await request(app)
+      .patch(`/items/${mId}/move`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ targetDirectory: "1/A/B/" });
+    expect(move.status).toBe(400);
+  });
 });

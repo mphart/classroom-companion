@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
+import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Repository } from "../repositories/repository";
 
 const folderSchema = z.object({
@@ -10,7 +10,7 @@ const folderSchema = z.object({
 
 export const createFolderRoutes = (repo: Repository): Router => {
   const router = Router();
-  router.use(requireAuth);
+  router.use(createRequireAuth(repo));
 
   router.post("/", async (req: AuthenticatedRequest, res, next) => {
     try {

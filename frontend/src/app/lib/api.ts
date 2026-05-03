@@ -252,6 +252,16 @@ export async function regenerateNoteAiSummary(noteId: number): Promise<NoteDto> 
   return payload.note;
 }
 
+/** YouTube URL → transcript + summary note in `directory` (requires `/youtube/parse` on the API). */
+export async function parseYoutubeVideo(body: {
+  youtubeUrl: string;
+  directory: string;
+  /** Optional note title; server may default from video metadata. */
+  title?: string;
+}): Promise<{ note: NoteDto }> {
+  return apiPost('/youtube/parse', body) as Promise<{ note: NoteDto }>;
+}
+
 export async function login(body: { username: string; password: string }) {
   return apiPost('/auth/login', body) as Promise<{
     token: string;

@@ -6,7 +6,7 @@ import { createReadStream } from "node:fs";
 import multer from "multer";
 import { z } from "zod";
 import { extractPdfTextWithSlideMarkers } from "../lib/extractPdfText";
-import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
+import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Repository } from "../repositories/repository";
 import { getPdfUploadRoot } from "../lib/uploadPaths";
 import type { Item, Note } from "../types";
@@ -71,7 +71,7 @@ function sanitizePdfTitle(originalName: string | undefined, fallback: string): s
 
 export const createNoteRoutes = (repo: Repository): Router => {
   const router = Router();
-  router.use(requireAuth);
+  router.use(createRequireAuth(repo));
 
   router.post(
     "/upload-pdf",

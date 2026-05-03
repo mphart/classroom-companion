@@ -8,7 +8,7 @@ import {
 import { answerSessionQuestion } from "../lib/sessionQa";
 import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { summarizeSourceTexts } from "../lib/summary";
-import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
+import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Repository } from "../repositories/repository";
 import { mapNoteResponse } from "./noteRoutes";
 
@@ -58,7 +58,7 @@ const sessionQaLastRequestAt = new Map<number, number>();
 
 export const createAiRoutes = (repo: Repository): Router => {
   const router = Router();
-  router.use(requireAuth);
+  router.use(createRequireAuth(repo));
 
   router.post("/summarize/note/:noteId", async (req: AuthenticatedRequest, res, next) => {
     try {

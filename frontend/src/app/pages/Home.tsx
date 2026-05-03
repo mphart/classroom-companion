@@ -17,9 +17,13 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   Clipboard,
+  FileUp,
+  FolderPlus,
   LayoutGrid,
   Library,
+  Mic,
   Pencil,
   Sparkles,
 } from 'lucide-react';
@@ -32,6 +36,7 @@ import {
   generatePracticeExam,
   listItems,
   moveItem,
+  parseYoutubeVideo,
   renameItem,
   summarizeSelection,
   uploadSlidePdf,
@@ -58,7 +63,9 @@ import {
   loadImportantEvents,
   type StoredImportantEvent,
 } from '@/app/lib/importantEventsStorage';
+import { canCreateSubfolderInDirectory } from '@/app/lib/itemPathDepth';
 import {
+  directoryAtSegmentIndex,
   joinDirectory,
   parentDirectory,
   pathTitleSegments,
@@ -413,7 +420,6 @@ export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
-  const [showNewMenu, setShowNewMenu] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
@@ -439,6 +445,12 @@ export function Home() {
   const [importantEvents, setImportantEvents] = useState<StoredImportantEvent[]>(() => loadImportantEvents());
   const [importantAlertOpen, setImportantAlertOpen] = useState(false);
   const [importantAlertList, setImportantAlertList] = useState<StoredImportantEvent[]>([]);
+  const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
+  const [newFolderInput, setNewFolderInput] = useState('');
+  const [newFolderFieldError, setNewFolderFieldError] = useState('');
+  const [parseVideoDialogOpen, setParseVideoDialogOpen] = useState(false);
+  const [parseVideoUrl, setParseVideoUrl] = useState('');
+  const [parseVideoFieldError, setParseVideoFieldError] = useState('');
   const pdfFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -600,6 +612,11 @@ export function Home() {
 
   const atRoot = userRoot !== null && currentDirectory === userRoot;
 
+  const canCreateSubfolder = useMemo(() => {
+    if (userId === undefined || currentDirectory === null) return false;
+    return canCreateSubfolderInDirectory(currentDirectory, userId);
+  }, [userId, currentDirectory]);
+
   const handleLogout = () => {
     clearSession();
     navigate('/', { replace: true });
@@ -632,6 +649,17 @@ export function Home() {
     setCurrentDirectory(parent && parent.length >= userRoot.length ? parent : userRoot);
   };
 
+  const navigateToBreadcrumbIndex = useCallback(
+    (segmentIndex: number) => {
+      const cwd = currentDirectory;
+      if (userId === undefined || cwd === null) return;
+      const segments = pathTitleSegments(cwd, userId);
+      const dir = directoryAtSegmentIndex(userId, segments, segmentIndex);
+      setCurrentDirectory(dir);
+    },
+    [userId, currentDirectory],
+  );
+
   const handlePdfFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -644,7 +672,6 @@ export function Home() {
     setError('');
     try {
       const note = await uploadSlidePdf(currentDirectory, file);
-      setShowNewMenu(false);
       await loadItems();
       toast.success('Slides uploaded');
       navigate({ pathname: '/viewer', search: `?noteId=${String(note.id)}` }, { state: { noteId: note.id } });
@@ -656,24 +683,81 @@ export function Home() {
     }
   };
 
-  const handleNewFolder = async () => {
+  const handleCreateFolderFromDialog = async () => {
     if (!userRoot || !currentDirectory) return;
+    const trimmed = newFolderInput.trim();
+    if (!trimmed) {
+      setNewFolderFieldError('Name is required.');
+      return;
+    }
+    if (trimmed.length > MAX_ITEM_NAME_LENGTH) {
+      setNewFolderFieldError(`Name must be at most ${MAX_ITEM_NAME_LENGTH} characters.`);
+      return;
+    }
+    const taken = items.some(
+      (i) => i.type === 'folder' && i.name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (taken) {
+      setNewFolderFieldError('A folder with that name already exists here.');
+      return;
+    }
+
+    setNewFolderFieldError('');
     setLoading(true);
     setError('');
     try {
-      const existingFolders = items.filter((i) => i.type === 'folder').map((i) => i.name.toLowerCase());
-      let candidate = 'Untitled Folder';
-      let suffix = 1;
-      while (existingFolders.includes(candidate.toLowerCase())) {
-        suffix += 1;
-        candidate = `Untitled Folder ${suffix}`;
-      }
-
-      await createFolder(candidate, currentDirectory);
-      setShowNewMenu(false);
+      await createFolder(trimmed, currentDirectory);
+      setNewFolderDialogOpen(false);
+      setNewFolderInput('');
       await loadItems();
+      toast.success('Folder created');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create folder');
+      toast.error(err instanceof Error ? err.message : 'Failed to create folder');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleParseVideoFromDialog = async () => {
+    const raw = parseVideoUrl.trim();
+    if (!raw) {
+      setParseVideoFieldError('Paste a YouTube link.');
+      return;
+    }
+    try {
+      const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+      if (!u.hostname.includes('youtu')) {
+        setParseVideoFieldError('Enter a valid YouTube URL.');
+        return;
+      }
+    } catch {
+      setParseVideoFieldError('Enter a valid YouTube URL.');
+      return;
+    }
+
+    if (!currentDirectory) return;
+    setParseVideoFieldError('');
+    setLoading(true);
+    setError('');
+    try {
+      const urlNormalized = raw.startsWith('http') ? raw.trim() : `https://${raw.trim()}`;
+      const result = await parseYoutubeVideo({
+        youtubeUrl: urlNormalized,
+        directory: currentDirectory,
+      });
+      setParseVideoDialogOpen(false);
+      setParseVideoUrl('');
+      await loadItems();
+      toast.success('Video parsed');
+      navigate(
+        { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
+        { state: { noteId: result.note.id } },
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not parse video';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -890,15 +974,18 @@ export function Home() {
           className="border-b border-border bg-card dark:border-[color-mix(in_srgb,var(--brand)_14%,transparent)] dark:bg-[oklch(0.13_0.01_0)] dark:shadow-[0_12px_40px_-28px_rgba(0,0,0,0.65)]"
         >
           <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 rounded-md" />
-              <div className="relative">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-4">
+              <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 shrink-0 rounded-md" />
+              <nav
+                aria-label="Create in this folder"
+                className="flex min-w-0 flex-1 flex-wrap items-center justify-evenly gap-x-1 gap-y-2 sm:gap-x-2"
+              >
                 <motion.button
                   type="button"
-                  onClick={() => setShowNewMenu(!showNewMenu)}
                   disabled={loading}
-                  className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
+                  onClick={() => navigate('/recording')}
+                  className="inline-flex min-h-10 min-w-0 flex-1 basis-[30%] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 sm:basis-auto sm:px-4"
                   style={{ backgroundColor: 'var(--brand)' }}
                   onMouseEnter={(e) =>
                     loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
@@ -908,38 +995,53 @@ export function Home() {
                   }
                   whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
                 >
-                  + New
+                  <Mic className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">Record</span>
                 </motion.button>
-                {showNewMenu && (
-                  <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-56 z-10">
-                    <button
-                      onClick={() => {
-                        navigate('/recording');
-                        setShowNewMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Start New Recording
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        pdfFileInputRef.current?.click();
-                        setShowNewMenu(false);
-                      }}
-                      disabled={loading}
-                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-                    >
-                      Upload PDF slides
-                    </button>
-                    <button
-                      onClick={() => void handleNewFolder()}
-                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
-                    >
-                      Add New Folder
-                    </button>
-                  </div>
-                )}
+                <span className="shrink-0 select-none text-muted-foreground" aria-hidden>
+                  |
+                </span>
+                <motion.button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => pdfFileInputRef.current?.click()}
+                  className="inline-flex min-h-10 min-w-0 flex-1 basis-[30%] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 sm:basis-auto sm:px-4"
+                  style={{ backgroundColor: 'var(--brand)' }}
+                  onMouseEnter={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                  }
+                  onMouseLeave={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                  }
+                  whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+                >
+                  <FileUp className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">Upload PDF</span>
+                </motion.button>
+                <span className="shrink-0 select-none text-muted-foreground" aria-hidden>
+                  |
+                </span>
+                <motion.button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setParseVideoFieldError('');
+                    setParseVideoUrl('');
+                    setParseVideoDialogOpen(true);
+                  }}
+                  className="inline-flex min-h-10 min-w-0 flex-1 basis-[30%] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 sm:basis-auto sm:px-4"
+                  style={{ backgroundColor: 'var(--brand)' }}
+                  onMouseEnter={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                  }
+                  onMouseLeave={(e) =>
+                    loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                  }
+                  whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+                >
+                  <Clapperboard className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">Parse video</span>
+                </motion.button>
                 <input
                   ref={pdfFileInputRef}
                   type="file"
@@ -948,10 +1050,10 @@ export function Home() {
                   aria-hidden
                   onChange={(e) => void handlePdfFileSelected(e)}
                 />
-              </div>
+              </nav>
             </div>
 
-            <div className="relative flex items-center gap-3">
+            <div className="relative flex shrink-0 items-center gap-3">
               <motion.button
                 type="button"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
@@ -1075,7 +1177,8 @@ export function Home() {
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm dark:bg-background/40">
                 <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
-                Capture a lecture from + New
+                <span className="text-foreground">Record</span> or <span className="text-foreground">Parse video</span>{' '}
+                from the top bar
               </span>
             </div>
           </div>
@@ -1094,25 +1197,55 @@ export function Home() {
           transition={{ duration: 0.4, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
           key={`browse-toolbar-${pathSegments.join('/')}`}
         >
-          <div className="flex flex-wrap items-center gap-3">
-            <motion.button
-              type="button"
-              onClick={goUpOneLevel}
-              disabled={atRoot || loading}
-              className="px-3 py-2 border border-border rounded-lg transition-shadow duration-300 disabled:opacity-50 hover:shadow-md"
-              whileTap={reduceMotion || atRoot || loading ? undefined : { scale: 0.97 }}
-            >
-              Back
-            </motion.button>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             <motion.h1
-              className="text-2xl"
+              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-semibold tracking-tight"
               initial={reduceMotion ? false : { opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               key={pathSegments.join('/')}
             >
-              {pathSegments.join(' / ')}
+              {pathSegments.map((label, index) => {
+                const isCurrent = index === pathSegments.length - 1;
+                return (
+                  <span key={`${label}-${index}`} className="inline-flex min-w-0 items-center gap-x-2">
+                    {index > 0 ? (
+                      <span className="shrink-0 text-muted-foreground select-none" aria-hidden>
+                        /
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => navigateToBreadcrumbIndex(index)}
+                      aria-current={isCurrent ? 'page' : undefined}
+                      className={cn(
+                        'min-w-0 truncate text-left transition-colors hover:text-[var(--brand)]',
+                        !isCurrent && 'underline decoration-2 underline-offset-[5px]',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  </span>
+                );
+              })}
             </motion.h1>
+            {canCreateSubfolder ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                disabled={loading}
+                onClick={() => {
+                  setNewFolderFieldError('');
+                  setNewFolderInput('');
+                  setNewFolderDialogOpen(true);
+                }}
+              >
+                <FolderPlus className="size-4" aria-hidden />
+                New folder
+              </Button>
+            ) : null}
             {loading ? (
               <motion.span
                 className="text-sm text-muted-foreground"
@@ -1311,6 +1444,105 @@ export function Home() {
               >
                 {loading ? 'Generating…' : 'Generate'}
               </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={newFolderDialogOpen}
+          onOpenChange={(open) => {
+            setNewFolderDialogOpen(open);
+            if (!open) {
+              setNewFolderFieldError('');
+              setNewFolderInput('');
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>New folder</DialogTitle>
+              <DialogDescription>
+                Enter a name for the folder in your current location (at most {MAX_ITEM_NAME_LENGTH} characters).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="new-folder-name">Folder name</Label>
+              <Input
+                id="new-folder-name"
+                value={newFolderInput}
+                onChange={(e) => setNewFolderInput(e.target.value.slice(0, MAX_ITEM_NAME_LENGTH))}
+                maxLength={MAX_ITEM_NAME_LENGTH}
+                placeholder="e.g. Unit 2"
+                aria-invalid={Boolean(newFolderFieldError)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateFolderFromDialog();
+                  }
+                }}
+              />
+              <div className="flex justify-end text-xs text-muted-foreground">
+                {newFolderInput.length} / {MAX_ITEM_NAME_LENGTH}
+              </div>
+              {newFolderFieldError ? <p className="text-sm text-destructive">{newFolderFieldError}</p> : null}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setNewFolderDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={loading} onClick={() => void handleCreateFolderFromDialog()}>
+                {loading ? 'Creating…' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={parseVideoDialogOpen}
+          onOpenChange={(open) => {
+            setParseVideoDialogOpen(open);
+            if (!open) {
+              setParseVideoFieldError('');
+              setParseVideoUrl('');
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Parse video</DialogTitle>
+              <DialogDescription>
+                Paste a YouTube link. The note will be created in your current folder:{' '}
+                <span className="font-medium text-foreground">{browseLocationLabel}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2 py-2">
+              <Label htmlFor="parse-video-url">YouTube URL</Label>
+              <Input
+                id="parse-video-url"
+                type="url"
+                inputMode="url"
+                value={parseVideoUrl}
+                onChange={(e) => setParseVideoUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+                aria-invalid={Boolean(parseVideoFieldError)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleParseVideoFromDialog();
+                  }
+                }}
+              />
+              {parseVideoFieldError ? <p className="text-sm text-destructive">{parseVideoFieldError}</p> : null}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setParseVideoDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={loading} onClick={() => void handleParseVideoFromDialog()}>
+                {loading ? 'Parsing…' : 'Parse'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

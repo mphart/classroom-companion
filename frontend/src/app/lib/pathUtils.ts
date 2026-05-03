@@ -25,3 +25,14 @@ export function pathTitleSegments(directory: string, userId: number): string[] {
   const tail = parts.slice(1);
   return tail.length === 0 ? ['Home'] : ['Home', ...tail];
 }
+
+/** Directory path for breadcrumb segment index (`0` = user root / “Home”). */
+export function directoryAtSegmentIndex(userId: number, segments: string[], index: number): string {
+  let dir = userRootDirectory(userId);
+  for (let j = 1; j <= index; j++) {
+    const name = segments[j];
+    if (!name) break;
+    dir = joinDirectory(dir, name);
+  }
+  return dir;
+}

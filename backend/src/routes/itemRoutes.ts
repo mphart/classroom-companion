@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
+import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Item, SortBy, SortDir } from "../types";
 import type { Repository } from "../repositories/repository";
 
@@ -39,7 +39,7 @@ const toItemResponse = (item: Item) => ({
 
 export const createItemRoutes = (repo: Repository): Router => {
   const router = Router();
-  router.use(requireAuth);
+  router.use(createRequireAuth(repo));
 
   router.get("/", async (req: AuthenticatedRequest, res, next) => {
     try {

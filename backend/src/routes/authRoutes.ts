@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { hashPassword, signToken, verifyPassword } from "../lib/auth";
-import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
+import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Repository } from "../repositories/repository";
 
 const signupSchema = z.object({
@@ -17,6 +17,7 @@ const loginSchema = z.object({
 
 export const createAuthRoutes = (repo: Repository): Router => {
   const router = Router();
+  const requireAuth = createRequireAuth(repo);
 
   router.post("/signup", async (req, res, next) => {
     try {
@@ -48,14 +49,8 @@ export const createAuthRoutes = (repo: Repository): Router => {
 
   router.post("/logout", (_req, res) => res.status(204).send());
 
-  router.get("/me", requireAuth, async (req: AuthenticatedRequest, res, next) => {
-    try {
-      const user = await repo.findUserById(req.authUserId!);
-      if (!user) return res.status(404).json({ error: "User not found." });
-      return res.json({ user });
-    } catch (error) {
-      return next(error);
-    }
+  router.get("/me", requireAuth, (req: AuthenticatedRequest, res) => {
+    return res.json({ user: req.authUser! });
   });
 
   return router;

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, FolderOpen, Languages, MessageCircleQuestion, M
 import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
+import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
 import { createFolder, createNote, listItems, sessionQaAsk, type ListedItemDto } from '@/app/lib/api';
 import {
   extractImportantDatesFromTranscript,
@@ -631,6 +632,7 @@ export function ActiveRecording() {
           className="brand-ambient-blob-c absolute left-[30%] top-[35%] h-[min(38vmin,16rem)] w-[min(38vmin,16rem)] rounded-full bg-[var(--brand)] opacity-[0.06] blur-[3.5rem]"
           style={{ animationDelay: '-1s' }}
         />
+        <PageAmbientDecor />
       </div>
 
       <div className="relative z-10 flex w-80 shrink-0 flex-col border-r border-border bg-card/95 p-6 backdrop-blur-sm dark:bg-card/90">

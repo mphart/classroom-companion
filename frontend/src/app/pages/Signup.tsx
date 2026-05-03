@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { signup as signupRequest } from '@/app/lib/api';
 import { getToken, setSession } from '@/app/lib/authSession';
+import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
 import '@/styles/brand-ambient.css';
 
 export function Signup() {
@@ -86,6 +87,7 @@ export function Signup() {
           className="brand-ambient-blob-c absolute left-[25%] top-[40%] h-[min(48vmin,22rem)] w-[min(48vmin,22rem)] rounded-full bg-[var(--brand)] opacity-[0.1] blur-[4rem]"
           style={{ animationDelay: '-1.5s' }}
         />
+        <PageAmbientDecor />
       </div>
 
       <motion.div
@@ -106,10 +108,16 @@ export function Signup() {
           />
         </div>
         <div className="relative text-center">
-          <img
+          <motion.img
             src={logo}
             alt="ClassroomCompanion Logo"
             className="mx-auto w-96 max-w-full drop-shadow-xl"
+            animate={reduceMotion ? undefined : { y: [0, -5, 0] }}
+            transition={
+              reduceMotion
+                ? undefined
+                : { duration: 5.5, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }
+            }
           />
         </div>
       </motion.div>

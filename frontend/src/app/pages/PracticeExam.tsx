@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
+import { motion, useReducedMotion } from 'motion/react';
 import logo from '@/assets/corner-logo.svg';
+import '@/styles/brand-ambient.css';
+import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
 import {
   getNote,
   gradePracticeExamShortAnswers,
@@ -51,6 +54,7 @@ type LocationState = { noteId?: number } | null;
 export function PracticeExam() {
   const navigate = useNavigate();
   const location = useLocation();
+  const reduceMotion = useReducedMotion();
   const noteId = (location.state as LocationState)?.noteId;
 
   const [note, setNote] = useState<NoteDto | null>(null);
@@ -159,9 +163,26 @@ export function PracticeExam() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="border-b border-border bg-card shrink-0">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
+        <div
+          className="brand-ambient-blob-a absolute -left-[14%] top-[-12%] h-[min(48vmin,20rem)] w-[min(48vmin,20rem)] rounded-full bg-[var(--brand)] opacity-[0.09] blur-[3.5rem]"
+          style={{ animationDelay: '-2s' }}
+        />
+        <div
+          className="brand-ambient-blob-b absolute -right-[8%] bottom-[8%] h-[min(42vmin,18rem)] w-[min(42vmin,18rem)] rounded-full bg-[var(--brand-deep)] opacity-[0.07] blur-[3rem]"
+          style={{ animationDelay: '-5s' }}
+        />
+        <PageAmbientDecor />
+      </div>
+
+      <motion.header
+        className="relative z-10 shrink-0 border-b border-border bg-card/95 backdrop-blur-sm dark:bg-card/90"
+        initial={reduceMotion ? false : { opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 rounded-md" />
             <button
@@ -172,22 +193,27 @@ export function PracticeExam() {
               ← Home
             </button>
           </div>
-          <h1 className="text-lg font-semibold truncate max-w-[50%] text-right">
+          <h1 className="max-w-[50%] truncate text-right text-lg font-semibold">
             {exam?.title ?? note?.title ?? 'Practice exam'}
           </h1>
         </div>
-      </header>
+      </motion.header>
 
       {error ? (
-        <div className="max-w-7xl mx-auto px-6 py-4 w-full">
+        <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-4">
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         </div>
       ) : null}
 
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-56 shrink-0 border-r border-border bg-card p-4 flex flex-col gap-2">
+      <div className="relative z-10 flex min-h-0 flex-1">
+        <motion.aside
+          className="flex w-56 shrink-0 flex-col gap-2 border-r border-border bg-card/95 p-4 backdrop-blur-sm dark:bg-card/90"
+          initial={reduceMotion ? false : { opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.38, delay: reduceMotion ? 0 : 0.05, ease: [0.22, 1, 0.36, 1] }}
+        >
           <p className="text-sm font-medium text-muted-foreground mb-2">Questions</p>
           <ol className="space-y-2 flex-1 overflow-y-auto">
             {questions.map((_, i) => {
@@ -202,19 +228,30 @@ export function PracticeExam() {
               );
             })}
           </ol>
-          <p className="text-sm text-muted-foreground pt-2 border-t border-border">
+          <p className="border-t border-border pt-2 text-sm text-muted-foreground">
             {checked ? `${questions.length}/${questions.length} reviewed` : `${completedCount}/${questions.length} comp.`}
           </p>
-        </aside>
+        </motion.aside>
 
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto p-6 md:p-8 pb-32">
             <div className="max-w-3xl mx-auto space-y-10">
               {loading && <p className="text-muted-foreground">Loading exam…</p>}
               {!loading && !error && exam && (
                 <>
                   {exam.questions.map((q, i) => (
-                    <section key={i} className="rounded-lg border border-border bg-card p-6 shadow-sm">
+                    <motion.section
+                      key={i}
+                      className="rounded-lg border border-border bg-card p-6 shadow-sm"
+                      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+                      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '-40px' }}
+                      transition={{
+                        duration: 0.38,
+                        delay: reduceMotion ? 0 : Math.min(i, 12) * 0.03,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                    >
                       <h2 className="text-base font-semibold mb-3">
                         Question {i + 1}:{' '}
                         <span className="font-normal text-foreground">{q.prompt}</span>
@@ -277,24 +314,30 @@ export function PracticeExam() {
                           ) : null}
                         </div>
                       )}
-                    </section>
+                    </motion.section>
                   ))}
                 </>
               )}
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-border bg-card py-4 px-6 flex justify-center">
-            <button
+          <motion.div
+            className="flex shrink-0 justify-center border-t border-border bg-card/95 px-6 py-4 backdrop-blur-sm dark:bg-card/90"
+            initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: reduceMotion ? 0 : 0.12, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <motion.button
               type="button"
               disabled={loading || !!error || !exam || checked || checking}
               onClick={() => void handleCheck()}
-              className="px-8 py-2.5 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="rounded-lg px-8 py-2.5 text-white transition-colors disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand)' }}
+              whileTap={reduceMotion || loading || !!error || !exam || checked || checking ? undefined : { scale: 0.97 }}
             >
               {checking ? 'Checking…' : 'Check'}
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         </main>
       </div>
     </div>

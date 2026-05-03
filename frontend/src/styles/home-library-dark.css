@@ -1,0 +1,159 @@
+/**
+ * Home / library folder view — dark-first polish (ambient bump + folder “stage”).
+ * Imported from Home.tsx only.
+ */
+
+.dark .home-library-root .page-ambient-mesh {
+  opacity: 0.58;
+}
+
+.dark .home-library-root .page-ambient-grid {
+  opacity: 0.1;
+}
+
+/* Soft bloom behind the folder area — only noticeable in dark */
+.dark .home-library-bloom {
+  opacity: 0.22;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes home-library-bloom-pulse {
+    0%,
+    100% {
+      transform: translate3d(-50%, 0, 0) scale(1);
+      opacity: 0.18;
+    }
+    50% {
+      transform: translate3d(-50%, -4%, 0) scale(1.06);
+      opacity: 0.28;
+    }
+  }
+
+  .dark .home-library-bloom {
+    animation: home-library-bloom-pulse 18s ease-in-out infinite;
+  }
+
+  @keyframes home-folder-stage-shimmer {
+    0%,
+    100% {
+      transform: translateX(-18%) skewX(-12deg);
+      opacity: 0.14;
+    }
+    50% {
+      transform: translateX(14%) skewX(-12deg);
+      opacity: 0.38;
+    }
+  }
+
+  .dark .home-folder-stage::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      115deg,
+      transparent 35%,
+      color-mix(in srgb, var(--brand) 32%, transparent) 50%,
+      transparent 65%
+    );
+    pointer-events: none;
+    z-index: 0;
+    animation: home-folder-stage-shimmer 12s ease-in-out infinite;
+  }
+
+  @keyframes home-hero-sheen {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .dark .home-hero-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--brand) 12%, transparent),
+      transparent 45%,
+      color-mix(in srgb, var(--brand-deep) 20%, transparent)
+    );
+    background-size: 200% 200%;
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+    animation: home-hero-sheen 14s ease-in-out infinite;
+  }
+}
+
+/* Folder / file list “stage” */
+.home-folder-stage {
+  position: relative;
+  z-index: 0;
+  margin-top: 0.5rem;
+  border-radius: 1rem;
+  padding: 1rem;
+  isolation: isolate;
+}
+
+@media (min-width: 640px) {
+  .home-folder-stage {
+    padding: 1.25rem;
+  }
+}
+
+.dark .home-folder-stage {
+  border: 1px solid color-mix(in srgb, var(--brand) 36%, rgba(255, 255, 255, 0.06));
+  background: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--brand) 10%, oklch(0.17 0.02 150)) 0%,
+    oklch(0.13 0.01 150) 48%,
+    oklch(0.1 0 0) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 32px 72px -40px rgba(0, 0, 0, 0.9),
+    0 0 120px -56px color-mix(in srgb, var(--brand) 50%, transparent);
+}
+
+.dark .home-folder-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+html:not(.dark) .home-folder-stage {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.dark .home-hero-glow {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--brand) 38%, rgba(255, 255, 255, 0.1)) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--brand) 15%, transparent) inset,
+    0 20px 56px -28px color-mix(in srgb, var(--brand) 35%, transparent),
+    0 0 64px -32px color-mix(in srgb, var(--brand) 25%, transparent);
+}
+
+.dark .home-hero-glow > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dark .home-library-bloom {
+    animation: none !important;
+  }
+  .dark .home-folder-stage::after {
+    display: none;
+  }
+  .dark .home-hero-glow::before {
+    animation: none !important;
+  }
+}

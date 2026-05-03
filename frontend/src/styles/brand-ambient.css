@@ -62,4 +62,92 @@
     animation: brand-ambient-drift-c 9s ease-in-out infinite;
     will-change: transform;
   }
+
+  @keyframes page-ambient-mesh-shift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(2.2%, -1.6%, 0) scale(1.045);
+    }
+  }
+
+  @keyframes page-ambient-grid-pan {
+    0% {
+      background-position: 0 0, 0 0;
+    }
+    100% {
+      background-position: 52px 52px, 52px 52px;
+    }
+  }
+
+  @keyframes brand-accent-shimmer {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .page-ambient-mesh {
+    animation: page-ambient-mesh-shift 24s ease-in-out infinite;
+  }
+
+  .page-ambient-grid {
+    animation: page-ambient-grid-pan 36s linear infinite;
+  }
+
+  .brand-accent-bar-animated {
+    background-size: 220% 100%;
+    animation: brand-accent-shimmer 8s ease-in-out infinite alternate;
+  }
+}
+
+/**
+ * Soft mesh + grid overlays (used with PageAmbientDecor).
+ * Base styles apply always; motion is gated in the block above.
+ */
+.page-ambient-mesh {
+  position: absolute;
+  inset: -14%;
+  pointer-events: none;
+  opacity: 0.42;
+  background:
+    radial-gradient(ellipse 72% 56% at 20% 40%, color-mix(in srgb, var(--brand) 26%, transparent), transparent 54%),
+    radial-gradient(ellipse 62% 48% at 82% 68%, color-mix(in srgb, var(--brand-deep) 22%, transparent), transparent 56%);
+}
+
+.dark .page-ambient-mesh {
+  opacity: 0.34;
+}
+
+.page-ambient-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.032;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--brand) 38%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--brand) 38%, transparent) 1px, transparent 1px);
+  background-size: 52px 52px;
+  -webkit-mask-image: radial-gradient(ellipse 88% 78% at 50% 44%, #000 22%, transparent 70%);
+  mask-image: radial-gradient(ellipse 88% 78% at 50% 44%, #000 22%, transparent 70%);
+}
+
+.dark .page-ambient-grid {
+  opacity: 0.052;
+}
+
+.brand-accent-bar-animated {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--brand) 85%, transparent),
+    var(--brand-hover),
+    color-mix(in srgb, var(--brand) 85%, transparent),
+    transparent
+  );
+  background-size: 100% 100%;
 }

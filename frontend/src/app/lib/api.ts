@@ -158,6 +158,15 @@ export async function summarizeSelection(body: {
   return apiPost('/ai/summarize/selection', body) as Promise<{ note: NoteDto; sourceCount: number }>;
 }
 
+/** Live lecture Session Q&A — uses recent transcript + Gemini (`GEMINI_API_KEY`). */
+export async function sessionQaAsk(body: {
+  transcript: string;
+  question: string;
+  language?: string;
+}): Promise<{ answer: string }> {
+  return apiPost('/ai/session-qa', body) as Promise<{ answer: string }>;
+}
+
 export async function generatePracticeExam(body: {
   noteIds: number[];
   folderIds: number[];

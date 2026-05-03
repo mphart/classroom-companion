@@ -1,16 +1,25 @@
+# Classroom Companion — frontend
 
-  # Website Design
+React + Vite single-page app. See the **[root `README.md`](../README.md)** for full features, environment variables, Docker, and **AI (summaries, practice exams, roadmap for PDF/YouTube)**.
 
-  This is a code bundle for Website Design. The original project is available at https://www.figma.com/design/LfOZxnvKZ86AC93CVrZ1Nt/Website-Design.
+## Run locally
 
-  ## Running the code
+```bash
+npm install
+npm run dev
+```
 
-  Run `npm i` to install the dependencies.
+Vite dev server proxies API routes to the backend (see `vite.config.ts`).
 
-  Run `npm run dev` to start the development server.
+## Build
 
-## Generate button behavior
+```bash
+npm run build
+```
 
-On the Home page, users can enable Selection Mode, select lecture files and/or folders, and click **Generate AI Summary**.
-Selected folders are processed recursively, and the generated summary is saved to the Home/root directory.
-  
+## Home page flows
+
+- **Select** mode: multi-select notes and/or folders, then **Generate AI Summary** or **Generate practice exam** (or delete).
+- **Calendar** view: items by creation date; optional **important date** markers from the latest recording transcript (browser storage — see root README).
+
+Original UI bundle reference: [Figma — Website Design](https://www.figma.com/design/LfOZxnvKZ86AC93CVrZ1Nt/Website-Design).

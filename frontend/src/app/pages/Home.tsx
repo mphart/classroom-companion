@@ -6,6 +6,7 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -29,10 +30,12 @@ import {
 } from 'lucide-react';
 import '@/styles/brand-ambient.css';
 import '@/styles/home-library-dark.css';
+import flashcardsListIcon from '@/assets/flashcards.svg';
 import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
   deleteItems,
+  generateFlashcardsSelection,
   generatePracticeExam,
   listItems,
   moveItem,
@@ -71,6 +74,27 @@ import {
   pathTitleSegments,
   userRootDirectory,
 } from '@/app/lib/pathUtils';
+
+/** Emoji (~text-2xl) or SVG for flashcards — aligned to ~24px row height. */
+function browseItemLeadingIcon(item: ListedItemDto): ReactNode {
+  if (item.type === 'folder') return <span className="text-2xl leading-none">📁</span>;
+  const t = item.noteSourceType;
+  if (t === 'generated_summary') return <span className="text-2xl leading-none">🧠</span>;
+  if (t === 'generated_practice_exam') return <span className="text-2xl leading-none">📝</span>;
+  if (t === 'generated_flashcards')
+    return (
+      <img
+        src={flashcardsListIcon}
+        alt=""
+        width={24}
+        height={24}
+        className="h-6 w-6 shrink-0 object-contain dark:invert"
+        aria-hidden
+      />
+    );
+  if (t === 'slide_pdf') return <span className="text-2xl leading-none">📑</span>;
+  return <span className="text-2xl leading-none">📄</span>;
+}
 
 /** Matches backend `items.name` / rename zod schema (`itemRoutes`). */
 const MAX_ITEM_NAME_LENGTH = 120;
@@ -259,17 +283,7 @@ function BrowseItemCard({
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex w-full min-w-0 items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="shrink-0 text-2xl">
-                {item.type === 'folder'
-                  ? '📁'
-                  : item.noteSourceType === 'generated_summary'
-                    ? '🧠'
-                    : item.noteSourceType === 'generated_practice_exam'
-                      ? '📝'
-                      : item.noteSourceType === 'slide_pdf'
-                        ? '📑'
-                        : '📄'}
-              </span>
+              <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
               <h3 className="truncate text-sm">{item.name}</h3>
             </div>
             {item.type === 'folder' ? (
@@ -315,16 +329,6 @@ function CalendarItemBar({
   onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>;
 }) {
   const { attachRef, isDragging, isOver, canDrop } = useBrowseItemDnD(item, loading, onMoveToFolder);
-  const icon =
-    item.type === 'folder'
-      ? '📁'
-      : item.noteSourceType === 'generated_summary'
-        ? '🧠'
-        : item.noteSourceType === 'generated_practice_exam'
-          ? '📝'
-          : item.noteSourceType === 'slide_pdf'
-            ? '📑'
-            : '📄';
 
   return (
     <div
@@ -350,7 +354,7 @@ function CalendarItemBar({
             aria-hidden
           />
         ) : null}
-        <span className="shrink-0">{icon}</span>
+        <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
         <span className="truncate">{item.name}</span>
       </button>
       {item.type === 'folder' ? (
@@ -441,6 +445,7 @@ export function Home() {
   const [showCalendarFolders, setShowCalendarFolders] = useState(true);
   const [showCalendarNotes, setShowCalendarNotes] = useState(true);
   const [showCalendarSummaries, setShowCalendarSummaries] = useState(true);
+  const [showCalendarFlashcards, setShowCalendarFlashcards] = useState(true);
   const [showCalendarImportant, setShowCalendarImportant] = useState(true);
   const [importantEvents, setImportantEvents] = useState<StoredImportantEvent[]>(() => loadImportantEvents());
   const [importantAlertOpen, setImportantAlertOpen] = useState(false);
@@ -583,9 +588,16 @@ export function Home() {
     return calendarTreeItems.filter((item) => {
       if (item.type === 'folder') return showCalendarFolders;
       if (item.noteSourceType === 'generated_summary') return showCalendarSummaries;
+      if (item.noteSourceType === 'generated_flashcards') return showCalendarFlashcards;
       return showCalendarNotes;
     });
-  }, [calendarTreeItems, showCalendarFolders, showCalendarNotes, showCalendarSummaries]);
+  }, [
+    calendarTreeItems,
+    showCalendarFolders,
+    showCalendarNotes,
+    showCalendarSummaries,
+    showCalendarFlashcards,
+  ]);
 
   const calendarItemsByDay = useMemo(() => {
     const record: Record<string, ListedItemDto[]> = {};
@@ -646,6 +658,14 @@ export function Home() {
 
     if (item.type === 'folder') {
       setCurrentDirectory(joinDirectory(item.directory, item.name));
+      return;
+    }
+
+    if (item.noteSourceType === 'generated_flashcards') {
+      navigate(
+        { pathname: '/flashcards', search: `?noteId=${String(item.id)}` },
+        { state: { noteId: item.id, browseDirectory: currentDirectory } },
+      );
       return;
     }
 
@@ -919,6 +939,39 @@ export function Home() {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateFlashcards = async () => {
+    if (!userRoot || !currentDirectory || selectedItems.size === 0) return;
+    setLoading(true);
+    setError('');
+
+    const selected = items.filter((item) => selectedItems.has(item.id));
+    const noteIds = selected.filter((item) => item.type === 'note').map((item) => item.id);
+    const folderIds = selected.filter((item) => item.type === 'folder').map((item) => item.id);
+
+    try {
+      const titleSeed = `Flashcards ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+      const title = titleSeed.length > 160 ? titleSeed.slice(0, 160) : titleSeed;
+
+      const result = await generateFlashcardsSelection({
+        noteIds,
+        folderIds,
+        outputDirectory: currentDirectory,
+        title,
+      });
+
+      setSelectedItems(new Set());
+      setSelectionMode(false);
+      navigate(
+        { pathname: '/flashcards', search: `?noteId=${String(result.note.id)}` },
+        { state: { noteId: result.note.id, browseDirectory: currentDirectory } },
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
     } finally {
       setLoading(false);
     }
@@ -1351,7 +1404,8 @@ export function Home() {
           transition={{ duration: 0.38, delay: reduceMotion ? 0 : 0.1, ease: [0.22, 1, 0.36, 1] }}
         >
           <span className="font-medium text-foreground">Tip:</span> Turn on <span className="text-foreground">Select</span>, pick
-          notes and/or folders (folders include everything inside), then generate a combined summary or practice exam.
+          notes and/or folders (folders include everything inside), then generate a combined summary, practice exam, or
+          flashcards.
           When you finish a recording, we scan the transcript for exams or due dates and can show them on the calendar
           below.
         </motion.div>
@@ -1608,6 +1662,22 @@ export function Home() {
               </motion.button>
               <motion.button
                 type="button"
+                onClick={() => void handleGenerateFlashcards()}
+                disabled={loading}
+                className="rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+                onMouseEnter={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+                }
+                onMouseLeave={(e) =>
+                  loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+                }
+                whileTap={reduceMotion || loading ? undefined : { scale: 0.97 }}
+              >
+                Generate flashcards
+              </motion.button>
+              <motion.button
+                type="button"
                 onClick={() => void handleDelete()}
                 disabled={loading}
                 className="rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:opacity-90 disabled:opacity-50"
@@ -1655,6 +1725,15 @@ export function Home() {
                     className="h-4 w-4 rounded border-border"
                   />
                   Summaries
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarFlashcards}
+                    onChange={(e) => setShowCalendarFlashcards(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Flashcards
                 </label>
                 <label className="flex cursor-pointer items-center gap-2">
                   <input

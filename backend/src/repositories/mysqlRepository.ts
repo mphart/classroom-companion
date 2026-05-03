@@ -19,7 +19,7 @@ type ItemRow = RowDataPacket & {
   directory_path: string;
   created_at: Date;
   updated_at: Date;
-  note_source_type?: "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf" | null;
+  note_source_type?: "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf" | "generated_flashcards" | null;
 };
 
 type NoteRow = RowDataPacket & {
@@ -28,7 +28,12 @@ type NoteRow = RowDataPacket & {
   ai_summary: string | null;
   language: string;
   duration_seconds: number;
-  source_type: "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf";
+  source_type:
+    | "recording"
+    | "generated_summary"
+    | "generated_practice_exam"
+    | "slide_pdf"
+    | "generated_flashcards";
   generated_from_count: number | null;
   pdf_file_path: string | null;
   created_at: Date;
@@ -53,14 +58,16 @@ export class MySqlRepository implements Repository {
       const needsUpdate =
         typeof col !== "string" ||
         !col.includes("generated_practice_exam") ||
-        !col.includes("slide_pdf");
+        !col.includes("slide_pdf") ||
+        !col.includes("generated_flashcards");
       if (needsUpdate) {
         await this.pool.execute(
           `ALTER TABLE notes MODIFY COLUMN source_type ENUM(
             'recording',
             'generated_summary',
             'generated_practice_exam',
-            'slide_pdf'
+            'slide_pdf',
+            'generated_flashcards'
           ) NOT NULL DEFAULT 'recording'`,
         );
       }

@@ -9,7 +9,12 @@ export type ListedItemDto = {
   directory: string;
   createdDate: string;
   lastEditedDate: string;
-  noteSourceType?: 'recording' | 'generated_summary' | 'generated_practice_exam' | 'slide_pdf';
+  noteSourceType?:
+    | 'recording'
+    | 'generated_summary'
+    | 'generated_practice_exam'
+    | 'slide_pdf'
+    | 'generated_flashcards';
 };
 
 export type NoteDto = {
@@ -22,7 +27,12 @@ export type NoteDto = {
   aiSummary: string | null;
   language: string;
   durationSeconds: number;
-  sourceType: 'recording' | 'generated_summary' | 'generated_practice_exam' | 'slide_pdf';
+  sourceType:
+    | 'recording'
+    | 'generated_summary'
+    | 'generated_practice_exam'
+    | 'slide_pdf'
+    | 'generated_flashcards';
   generatedFromCount: number | null;
   /** Present for slide PDF notes — path relative to API origin (use with auth fetch). */
   pdfUrl?: string;
@@ -234,6 +244,16 @@ export async function generatePracticeExam(body: {
   outputLanguage?: string;
 }): Promise<{ note: NoteDto; sourceCount: number }> {
   return apiPost('/ai/practice-exam/generate', body) as Promise<{ note: NoteDto; sourceCount: number }>;
+}
+
+export async function generateFlashcardsSelection(body: {
+  noteIds: number[];
+  folderIds: number[];
+  outputDirectory: string;
+  title: string;
+  outputLanguage?: string;
+}): Promise<{ note: NoteDto; sourceCount: number }> {
+  return apiPost('/ai/flashcards/generate', body) as Promise<{ note: NoteDto; sourceCount: number }>;
 }
 
 export type GradeVerdict = 'correct' | 'partial' | 'incorrect';

@@ -282,6 +282,38 @@ describe("MVP backend routes", () => {
     expect(["correct", "partial", "incorrect"]).toContain(grade.body.results[0].verdict);
   });
 
+  it("generates flashcards from selection", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Bio",
+      directory: "1/",
+    });
+    const noteRes = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Cells",
+      directory: "1/Bio/",
+      rawText: "Mitochondria produce ATP. The nucleus holds DNA. Ribosomes synthesize proteins.",
+      language: "English",
+      durationSeconds: 60,
+    });
+    const noteId = noteRes.body.note.id as number;
+
+    const gen = await request(app)
+      .post("/ai/flashcards/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteIds: [noteId],
+        folderIds: [],
+        outputDirectory: "1/",
+        title: "Bio key terms",
+      });
+    expect(gen.status).toBe(201);
+    expect(gen.body.note.sourceType).toBe("generated_flashcards");
+    const raw = JSON.parse(gen.body.note.rawText as string) as { version: number; cards: unknown[] };
+    expect(raw.version).toBe(1);
+    expect(Array.isArray(raw.cards)).toBe(true);
+    expect(raw.cards.length).toBeGreaterThanOrEqual(1);
+  });
+
   it("answers session Q&A from transcript (stub in test)", async () => {
     const { app, token } = await bootstrap();
     const transcript =

@@ -20,7 +20,7 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `GET /items?directory=userId/physics/&q=chapter&sortBy=lastEditedDate&sortDir=desc`
   - Response `200`:
     - `{ "items": [{ "id": 9, "type": "note", "name": "Lecture 3", "directory": "userId/physics/", "createdDate": "...", "lastEditedDate": "...", "noteSourceType": "recording" }] }`
-      - `noteSourceType` is only included for `note` items (`recording`, `generated_summary`, or `generated_practice_exam`)
+      - `noteSourceType` is only included for `note` items (`recording`, `generated_summary`, `generated_practice_exam`, `slide_pdf`, or `generated_flashcards`)
 - `POST /folders`
   - Request: `{ "name": "Physics", "directory": "userId/" }`
   - Response `201`: `{ "item": { "id": 3, "type": "folder", "name": "Physics", "directory": "userId/", "createdDate": "...", "lastEditedDate": "..." } }`
@@ -84,6 +84,15 @@ Server uses **`PRACTICE_API_KEY`** (not `GEMINI_API_KEY`) for generate and grade
   - Request: `{ "noteId": 42, "responses": [ { "questionIndex": 3, "answer": "student text" } ] }` — only indices that refer to `short_answer` questions in that note.
   - Response `200`: `{ "results": [ { "questionIndex": 3, "verdict": "correct" | "partial" | "incorrect", "feedback": "..." } ] }`
   - Returns `400` if the note is not a practice exam or an index is not a short-answer question.
+
+## Flashcards (Gemini)
+
+Uses **`GEMINI_API_KEY`** (same as summaries). Same **`GEMINI_MODEL`** applies.
+
+- `POST /ai/flashcards/generate`
+  - Request: `{ "noteIds": [1], "folderIds": [2], "outputDirectory": "userId/physics/", "title": "Chapter 3 Terms", "outputLanguage"?: "Spanish" }` — optional **`outputLanguage`** overrides inference; if omitted, card text defaults to **English** unless selected sources follow the same rules as AI summaries (non-English **`recording`** notes that agree on one language → stored `note.language` and card strings in that language).
+  - Response `201`: `{ "note": { ...sourceType: "generated_flashcards", "rawText": "<JSON deck>", ... }, "sourceCount": 5 }`
+  - The note’s `rawText` is JSON: `{ "version": 1, "title": string, "cards": [ { "term": string, "definition": string } ] }`.
 
 ## Realtime Speech-to-Text (WebSocket)
 

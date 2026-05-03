@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { generateFlashcardsFromSources } from "../lib/flashcardsGen";
 import {
   generatePracticeExamFromSources,
   gradeShortAnswers,
@@ -44,6 +45,14 @@ const practiceExamGradeSchema = z.object({
       answer: z.string(),
     }),
   ),
+});
+
+const flashcardsGenerateSchema = z.object({
+  noteIds: z.array(z.number().int().positive()).default([]),
+  folderIds: z.array(z.number().int().positive()).default([]),
+  outputDirectory: z.string().trim().min(1),
+  title: z.string().trim().min(1).max(180),
+  outputLanguage: z.string().trim().min(1).max(80).optional(),
 });
 
 const sessionQaSchema = z.object({
@@ -137,6 +146,40 @@ export const createAiRoutes = (repo: Repository): Router => {
         language: createdLanguage,
         durationSeconds: 0,
         sourceType: "generated_practice_exam",
+        generatedFromCount: sourceCount,
+      });
+      return res.status(201).json({ note: mapNoteResponse(created)!, sourceCount });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/flashcards/generate", async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const body = flashcardsGenerateSchema.parse(req.body);
+      const { texts, sourceCount, summarizeLanguage } = await repo.collectSummarySources({
+        userId: req.authUserId!,
+        noteIds: body.noteIds,
+        folderIds: body.folderIds,
+      });
+      if (texts.length === 0) return res.status(400).json({ error: "No source notes found for selected inputs." });
+
+      const outputLanguage = body.outputLanguage ?? summarizeLanguage ?? undefined;
+      const deck = await generateFlashcardsFromSources({
+        texts,
+        title: body.title,
+        outputLanguage,
+      });
+
+      const createdLanguage = outputLanguage?.trim() || "English";
+      const created = await repo.createNote({
+        userId: req.authUserId!,
+        title: body.title,
+        directoryPath: body.outputDirectory,
+        rawText: JSON.stringify(deck),
+        language: createdLanguage,
+        durationSeconds: 0,
+        sourceType: "generated_flashcards",
         generatedFromCount: sourceCount,
       });
       return res.status(201).json({ note: mapNoteResponse(created)!, sourceCount });

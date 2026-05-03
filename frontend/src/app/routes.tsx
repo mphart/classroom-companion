@@ -6,6 +6,7 @@ import { Home } from "./pages/Home";
 import { ActiveRecording } from "./pages/ActiveRecording";
 import { Viewer } from "./pages/Viewer";
 import { PracticeExam } from "./pages/PracticeExam";
+import { Flashcards } from "@/app/pages/Flashcards";
 
 
 export const router = createBrowserRouter([
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: "/practice-exam",
         Component: PracticeExam,
+      },
+      {
+        path: "/flashcards",
+        Component: Flashcards,
       },
     ],
   },

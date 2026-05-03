@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { BookOpen, FileText, Mic, Presentation, Sparkles } from 'lucide-react';
+import { BookOpen, FileText, Layers, Mic, Presentation, Sparkles } from 'lucide-react';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { fetchNotePdfBlob, getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
@@ -137,6 +137,7 @@ export function Viewer() {
     noteId,
     ...(browseDirectoryForBack ? { browseDirectory: browseDirectoryForBack } : {}),
   };
+  const flashcardsLocationState = practiceExamLocationState;
 
   const firstName = sessionUser ? firstNameFromDisplayName(sessionUser.name) : 'there';
   const dayGreet = timeOfDayGreeting();
@@ -147,20 +148,25 @@ export function Viewer() {
       ? `AI summary • merged from ${note.generatedFromCount} source note(s)`
       : note && note.sourceType === 'generated_practice_exam' && typeof note.generatedFromCount === 'number'
         ? `Practice exam • from ${note.generatedFromCount} source note(s)`
-        : note
-          ? note.sourceType === 'generated_summary'
-            ? 'AI-generated summary note'
-            : note.sourceType === 'generated_practice_exam'
-              ? 'Generated practice exam'
-              : note.sourceType === 'slide_pdf'
-                ? 'PDF slide deck'
-                : 'Saved lecture note'
-          : '';
+        : note && note.sourceType === 'generated_flashcards' && typeof note.generatedFromCount === 'number'
+          ? `Flashcards • from ${note.generatedFromCount} source note(s)`
+          : note
+            ? note.sourceType === 'generated_summary'
+              ? 'AI-generated summary note'
+              : note.sourceType === 'generated_practice_exam'
+                ? 'Generated practice exam'
+                : note.sourceType === 'generated_flashcards'
+                  ? 'Generated flashcard deck'
+                  : note.sourceType === 'slide_pdf'
+                    ? 'PDF slide deck'
+                    : 'Saved lecture note'
+            : '';
 
   const noteKindMeta = useMemo(() => {
     if (!note) return { label: 'Note', Icon: FileText };
     if (note.sourceType === 'generated_summary') return { label: 'AI summary', Icon: Sparkles };
     if (note.sourceType === 'generated_practice_exam') return { label: 'Practice exam', Icon: BookOpen };
+    if (note.sourceType === 'generated_flashcards') return { label: 'Flashcards', Icon: Layers };
     if (note.sourceType === 'slide_pdf') return { label: 'Slide deck (PDF)', Icon: Presentation };
     if (note.sourceType === 'recording') return { label: 'Lecture capture', Icon: Mic };
     return { label: 'Note', Icon: FileText };
@@ -281,6 +287,22 @@ export function Viewer() {
                 Open practice exam
               </button>
             ) : null}
+            {note?.sourceType === 'generated_flashcards' && noteId !== undefined ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  navigate(
+                    { pathname: '/flashcards', search: `?noteId=${String(noteId)}` },
+                    { state: flashcardsLocationState },
+                  )
+                }
+                className="rounded-lg px-4 py-2 text-white disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                Open flashcards
+              </button>
+            ) : null}
             {sessionUser ? (
               <span className="hidden rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground sm:inline">
                 @{sessionUser.username}
@@ -323,6 +345,27 @@ export function Viewer() {
                           style={{ backgroundColor: 'var(--brand)' }}
                         >
                           Open practice exam
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : note.sourceType === 'generated_flashcards' ? (
+                    <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-8 text-center">
+                      <p className="text-muted-foreground">
+                        This item is a flashcard deck. Open it to study with flip, shuffle, and mark cards as known.
+                      </p>
+                      {noteId !== undefined ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              { pathname: '/flashcards', search: `?noteId=${String(noteId)}` },
+                              { state: flashcardsLocationState },
+                            )
+                          }
+                          className="rounded-lg px-6 py-2.5 text-white"
+                          style={{ backgroundColor: 'var(--brand)' }}
+                        >
+                          Open flashcards
                         </button>
                       ) : null}
                     </div>

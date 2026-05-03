@@ -1,6 +1,6 @@
 # Agent reference — implementation context
 
-This document summarizes **architecture, env, Docker, speech-to-text, PDF slide uploads, and common pitfalls** so future agents (or humans) can work on the repo without re-deriving context from chat logs.
+This document summarizes **architecture, env, Docker, speech-to-text, PDF slide uploads, AI flashcards, and common pitfalls** so future agents (or humans) can work on the repo without re-deriving context from chat logs.
 
 Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pages/). **HTTP/WebSocket contracts** are in [`../backend/src/contracts/api-contracts.md`](../backend/src/contracts/api-contracts.md).
 
@@ -14,7 +14,8 @@ Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pag
 | Backend | Node.js, Express, TypeScript |
 | Database | MySQL (see `backend/src/db/schema.sql`) |
 | Auth | JWT (`Authorization: Bearer …`) |
-| Summaries | Google Gemini (`@google/generative-ai`) — `/ai/summarize/*` |
+| Summaries + flashcards | Google Gemini (`@google/generative-ai`) — `/ai/summarize/*`, **`/ai/flashcards/generate`** (`GEMINI_API_KEY`) |
+| Practice exams | Gemini via **`PRACTICE_API_KEY`** — `/ai/practice-exam/*` (generate + grade) |
 | Live STT | Deepgram streaming — browser → backend WebSocket → Deepgram |
 | Slide PDFs | Upload + disk storage; **pdfjs-dist** extracts per-page text server-side; viewer loads PDF via authenticated blob URL |
 
@@ -26,13 +27,15 @@ Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pag
 - **Recording artifact model:** Single **note** per recording with `rawText`, optional `aiSummary`, etc. (not separate “session file” rows for every artifact unless extended later).
 - **Viewer:** Read-only for saved content in product intent; editing workflows may live elsewhere.
 - **Post-recording flow:** Land on viewer/home per product iteration; implementation may navigate to Home after save — align with current `ActiveRecording` + routes.
-- **Slide decks (PDF):** One **note** per upload with `source_type = slide_pdf`, `notes.pdf_file_path` (relative to upload root), and `raw_text` holding extracted text with `--- Slide N ---` markers for AI. Whole-deck selection uses existing `/ai/summarize/selection` and `/ai/practice-exam/generate` (same as other notes). Image-only PDFs get a placeholder message in `raw_text` but the file remains viewable.
+- **Library folder context:** Navigating from **Home** to Viewer, Practice Exam, or Flashcards passes **`browseDirectory`** (the current browse path) in **React Router `location.state`**. **Back** on those pages navigates to `/home` with the same state so **`Home.tsx`** restores **`currentDirectory`**. If state is missing (e.g. cold load), Viewer-style pages fall back to **`note.directory`**. **AI summary, practice exam, and flashcard** generation all use **`outputDirectory: currentDirectory`** so new items land in the folder the user was browsing.
+- **Slide decks (PDF):** One **note** per upload with `source_type = slide_pdf`, `notes.pdf_file_path` (relative to upload root), and `raw_text` holding extracted text with `--- Slide N ---` markers for AI. Whole-deck selection uses **`/ai/summarize/selection`**, **`/ai/practice-exam/generate`**, and **`/ai/flashcards/generate`** like other notes. Image-only PDFs get a placeholder message in `raw_text` but the file remains viewable.
 
 ---
 
 ## Backend entrypoints
 
 - **HTTP:** `createApp()` in `backend/src/app.ts` — `/auth`, `/items`, `/folders`, `/notes`, `/ai`, `/health`.
+- **Flashcard decks (AI):** **`POST /ai/flashcards/generate`** — body matches selection-style APIs (`noteIds`, `folderIds`, `outputDirectory`, `title`, optional `outputLanguage`); reuses **`Repository.collectSummarySources`**. Uses **`GEMINI_API_KEY`** (same as summaries). Creates a note with **`source_type = generated_flashcards`**, **`raw_text`** = JSON `{ version: 1, title, cards: [{ term, definition }] }`. Code: **`backend/src/lib/flashcardsGen.ts`**, route in **`backend/src/routes/aiRoutes.ts`**. Schema: enum value + migration **`backend/src/db/migrations/003_flashcards.sql`**; **`MySqlRepository.ensureNotesSchema()`** upgrades existing DBs.
 - **PDF slides:** `POST /notes/upload-pdf` — multipart (`file`, `directory`, optional `title`); max **25 MB**; stores PDF under `PDF_UPLOAD_DIR` / default `uploads/pdfs` (`backend/src/lib/uploadPaths.ts`). `GET /notes/:noteId/pdf` — streams the file (**JWT**); used by the viewer after `fetchNotePdfBlob`. Implementation: `backend/src/routes/noteRoutes.ts`, extraction `backend/src/lib/extractPdfText.ts`. MySQL startup runs `ensureNotesSchema()` (`slide_pdf` enum + `pdf_file_path` column).
 - **Item move (reparent):** `PATCH /items/:itemId/move` with body `{ "targetDirectory": "<parent path trailing slash>" }` — implemented in `Repository.moveItem` (`mysqlRepository`, `inMemoryRepository`). Validates name collisions (`409`), folder-into-self/descendant (`400`), and **folder depth** (see below). Errors that should return 4xx use `HttpClientError` in `backend/src/lib/errors.ts` (handled in `backend/src/middleware/error.ts`).
 - **Folder depth (strict MVP):** At most **two** folder-name segments under the user root (e.g. `userId/A/` and `userId/A/B/`). The inner folder (`B`) **must not** contain subfolders (notes allowed). Helpers: `backend/src/lib/itemPathDepth.ts`; move validation: `backend/src/lib/validateItemMove.ts`. **`POST /folders`** rejects creating a folder when the parent directory is already at the innermost level.
@@ -52,7 +55,7 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 | --- | --- |
 | `JWT_SECRET` | JWT signing (override default in production) |
 | `JWT_EXPIRES_IN` | Optional |
-| `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`); optional alias may be documented in code |
+| `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`) and **flashcard generation** (`/ai/flashcards/generate`); optional alias may be documented in code |
 | `PRACTICE_API_KEY` | Gemini key for practice exam **generate** and **grade** (`/ai/practice-exam/*`); separate from `GEMINI_API_KEY` |
 | `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-2.5-flash-lite` |
 | `DEEPGRAM_API_KEY` | Live STT (English) on `/transcription/stream` |
@@ -100,7 +103,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 ## Frontend — Home file browser (items / folders)
 
-- **Page:** `frontend/src/app/pages/Home.tsx` — lists items for `currentDirectory`, selection mode, summaries/exams, list / grid / calendar layouts (motion + ambient background from `main` UI pass). **+ New → Upload PDF slides** calls `uploadSlidePdf` (`frontend/src/app/lib/api.ts`) into the current folder.
+- **Page:** `frontend/src/app/pages/Home.tsx` — lists items for `currentDirectory`, selection mode, **AI summary / practice exam / flashcards** generation, list / grid / calendar layouts (motion + ambient background from `main` UI pass). **+ New → Upload PDF slides** calls `uploadSlidePdf` (`frontend/src/app/lib/api.ts`) into the current folder. **`browseDirectory`** is passed in router state when opening Viewer, Practice Exam, or Flashcards (and when returning from generation flows). A **`useEffect`** on **`location.state.browseDirectory`** restores the folder after **Back**. **Flashcard** notes open **`/flashcards`** directly; list/calendar icons use **`frontend/src/assets/flashcards.svg`** (~24px, same visual weight as emoji glyphs). Calendar sidebar includes a **Flashcards** visibility toggle.
 - **Drag-and-drop:** `react-dnd` + `react-dnd-html5-backend`. The page root is wrapped in **`DndProvider`**. Items use **`useDrag`**; **folder** rows (and the synthetic **`..` / `DotDotFolderRow`**) use **`useDrop`** to call `moveItem` from `frontend/src/app/lib/api.ts`, then refresh the listing (and calendar tree when in calendar mode). **`sonner`** toasts for success/errors; **`Toaster`** is mounted in `frontend/src/app/App.tsx` next to **`RouterProvider`** and **`ThemeToggle`**.
 - **Parent row (`..`):** When **not** at the user root directory, a **`DotDotFolderRow`** appears (list + grid first row; calendar sidebar). Click navigates up (same as Back); drop moves the dragged item to **`parentDirectory(currentDirectory)`** via the same move API.
 
@@ -108,13 +111,21 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 ## Frontend — Viewer (notes + slide PDFs)
 
-- **Page:** `frontend/src/app/pages/Viewer.tsx` — loads note via `getNote`. For **`sourceType === 'slide_pdf'`**, fetches bytes with **`fetchNotePdfBlob`** and displays an **iframe** (blob URL); shows **Extracted text** below for transparency and Gemini summary when text exists.
+- **Page:** `frontend/src/app/pages/Viewer.tsx` — loads note via `getNote`. For **`sourceType === 'slide_pdf'`**, fetches bytes with **`fetchNotePdfBlob`** and displays an **iframe** (blob URL); shows **Extracted text** below for transparency and Gemini summary when text exists. For **`generated_practice_exam`** / **`generated_flashcards`**, shows **Open practice exam** / **Open flashcards** (navigate with **`browseDirectory`** preserved in state). URL sync for **`?noteId=`** keeps **`browseDirectory`** on **`replace`** navigation.
+
+---
+
+## Frontend — Practice Exam & Flashcards (full-screen flows)
+
+- **Routes:** `frontend/src/app/routes.tsx` — **`/practice-exam`**, **`/flashcards`** (auth layout). Prefer **`@/app/pages/...`** imports if the IDE mis-resolves relative `./pages/*` from `routes.tsx`.
+- **Practice Exam:** `frontend/src/app/pages/PracticeExam.tsx` — interactive MC + SA; **Back** uses **`browseDirectory`** state or **`note.directory`**.
+- **Flashcards:** `frontend/src/app/pages/Flashcards.tsx` — loads **`generated_flashcards`** note JSON; flip (3D CSS), prev/next, shuffle, filters **All / Still learning / Known** (ratings are **session-only**, not persisted). Filter chips stay visible when a filter yields zero cards so users can switch back. **Back** matches Practice Exam.
 
 ---
 
 ## Testing
 
-- **Backend:** `cd backend && npm test` (Vitest). Includes mocked Deepgram proxy tests; does not call real Deepgram/Gemini in CI unless configured. **`src/tests/app.test.ts`** covers item **move**, folder-depth limits, and **`POST /folders`** depth guard (in-memory app).
+- **Backend:** `cd backend && npm test` (Vitest). Includes mocked Deepgram proxy tests; does not call real Deepgram/Gemini in CI unless configured. **`src/tests/app.test.ts`** covers item **move**, folder-depth limits, **`POST /folders`** depth guard, **`POST /ai/flashcards/generate`** (stub deck in test env), and related flows (in-memory app).
 - **Typecheck:** `cd backend && npm run typecheck`
 - **Frontend build:** `cd frontend && npm run build`
 
@@ -137,6 +148,8 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 | `api` has no `DEEPGRAM_API_KEY` / `GLADIO_API_KEY` in Docker | Add to **root** `.env` and ensure compose passes keys into **`api.environment`**. English recordings need Deepgram; other languages need Gladia (`GLADIO_API_KEY`). |
 | Nginx won’t start | Invalid directive — check for `/*` comments; use `#` only. |
 | Summaries fail in Docker | Set `GEMINI_API_KEY` in env Compose passes to **`api`**. |
+| Flashcard generation **503** | Same as summaries — needs **`GEMINI_API_KEY`** on **`api`**. |
+| Flashcards fail with DB enum error | Run migration **`003_flashcards.sql`** or restart API so **`ensureNotesSchema()`** adds **`generated_flashcards`** to `notes.source_type`. |
 | Slide PDF **404** or missing after deploy | Ensure **`PDF_UPLOAD_DIR`** matches the mounted volume path (`/data/uploads/pdfs` in Compose) and the **`pdf_uploads`** volume is present; local dev uses `**/uploads/pdfs/` under cwd (gitignored). |
 
 ---
@@ -156,4 +169,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 | `docker-compose.yml` | Services and injected env |
 | `docker/nginx/default.conf` | SPA + API + WS proxy |
 | `docs/design-doc.md` | Product source of truth |
-| `backend/src/db/schema.sql` + `backend/src/db/migrations/` | MySQL schema; incremental migrations (e.g. **`slide_pdf`** / **`pdf_file_path`**) |
+| `backend/src/db/schema.sql` + `backend/src/db/migrations/` | MySQL schema; incremental migrations (e.g. **`slide_pdf`**, **`generated_flashcards`**, **`pdf_file_path`**) |
+| `backend/src/lib/flashcardsGen.ts` | Gemini JSON deck generation + test stub |
+| `frontend/src/app/pages/Flashcards.tsx` | Flashcard study UI |
+| `frontend/src/assets/flashcards.svg` | Home list/calendar icon for flashcard items |

@@ -24,7 +24,12 @@ export interface Item {
   noteSourceType?: Note["sourceType"] | null;
 }
 
-export type NoteSourceType = "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf";
+export type NoteSourceType =
+  | "recording"
+  | "generated_summary"
+  | "generated_practice_exam"
+  | "slide_pdf"
+  | "generated_flashcards";
 
 export interface Note {
   itemId: number;

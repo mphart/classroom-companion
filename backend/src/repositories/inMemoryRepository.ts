@@ -41,7 +41,12 @@ export class InMemoryRepository implements Repository {
   async listItems(params: ListItemsParams): Promise<Item[]> {
     const query = params.query?.toLowerCase();
     const dir = normalizePath(params.directoryPath);
-    let result = this.items.filter((i) => i.userId === params.userId && i.directoryPath === dir);
+    const tree = params.tree ?? false;
+    let result = this.items.filter((i) => {
+      if (i.userId !== params.userId) return false;
+      if (!tree) return i.directoryPath === dir;
+      return i.directoryPath === dir || i.directoryPath.startsWith(dir);
+    });
     if (query) result = result.filter((i) => i.name.toLowerCase().includes(query));
     const sortBy = params.sortBy ?? "lastEditedDate";
     const sortDir = params.sortDir ?? "desc";
@@ -80,6 +85,20 @@ export class InMemoryRepository implements Repository {
   async renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null> {
     const item = this.items.find((i) => i.id === input.itemId && i.userId === input.userId);
     if (!item) return null;
+    if (item.type === "folder") {
+      const oldPrefix = this.folderPrefix(item);
+      const newPrefix = `${normalizePath(item.directoryPath)}${input.newName}/`;
+      if (oldPrefix !== newPrefix) {
+        for (const candidate of this.items) {
+          if (candidate.userId !== input.userId || candidate.id === item.id) continue;
+          const d = normalizePath(candidate.directoryPath);
+          if (d.startsWith(oldPrefix)) {
+            candidate.directoryPath = newPrefix + d.slice(oldPrefix.length);
+            candidate.updatedAt = new Date();
+          }
+        }
+      }
+    }
     item.name = input.newName;
     item.updatedAt = new Date();
     return item;

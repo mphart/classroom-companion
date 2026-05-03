@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  gladiaErrorMessage,
-  normalizeGladiaServerMessage,
-} from "../lib/gladiaLive";
+import { gladiaErrorMessage, normalizeGladiaServerMessage } from "../lib/gladiaLive";
 
 describe("gladiaLive", () => {
   it("maps translation events to final client transcripts", () => {

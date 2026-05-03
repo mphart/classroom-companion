@@ -23,5 +23,7 @@ export interface Repository {
   collectSummarySources(input: { userId: number; noteIds: number[]; folderIds: number[] }): Promise<{
     texts: string[];
     sourceCount: number;
+    /** When every source note shares the same `language` (e.g. all "Spanish"), use for AI summary output. */
+    summarizeLanguage: string | null;
   }>;
 }

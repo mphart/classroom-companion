@@ -2,7 +2,7 @@ import type { NormalizedClientTranscript } from "./deepgramLive";
 
 const GLADIA_LIVE_URL = "https://api.gladia.io/v2/live";
 
-/** User-facing env name; Gladia expects this key on POST /v2/live as `x-gladia-key`. */
+/** `GLADIO_API_KEY` / `GLADIA_API_KEY` in env; sent to Gladia as `x-gladia-key` on POST /v2/live. */
 export function getGladioApiKey(): string {
   return (process.env.GLADIO_API_KEY ?? process.env.GLADIA_API_KEY ?? "").trim();
 }
@@ -114,8 +114,8 @@ type GladiaTranscriptPayload = {
 };
 
 /**
- * Map Gladia WebSocket JSON to the same shape Deepgram uses (`partial` / `final`).
- * When `preferTranslation` is true (non‑English target), use `translation` events so the text matches the target language.
+ * Map Gladia WebSocket JSON to the same shape as Deepgram (`partial` / `final`).
+ * When `preferTranslation` is true, use `translation` events so text is in the target language.
  */
 export function normalizeGladiaServerMessage(
   parsed: unknown,
@@ -125,7 +125,6 @@ export function normalizeGladiaServerMessage(
   const top = parsed as { type?: string; message?: string };
 
   if (top.type === "error" && typeof top.message === "string" && top.message.trim()) {
-    /* Caller may surface this as a client error frame */
     return null;
   }
 
@@ -168,10 +167,10 @@ export function normalizeGladiaServerMessage(
   return null;
 }
 
-/** Gladia sends structured errors; normalize to a short client message when possible. */
+/** Gladia structured errors → short message for the browser when possible. */
 export function gladiaErrorMessage(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== "object") return null;
-  const top = parsed as { type?: string; message?: string; error?: { message?: string } };
+  const top = parsed as { type?: string; message?: string; error?: { message?: string } | null };
   if (top.type === "error" && typeof top.message === "string" && top.message.trim()) {
     return top.message.trim();
   }

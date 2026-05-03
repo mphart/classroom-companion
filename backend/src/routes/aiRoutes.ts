@@ -33,20 +33,22 @@ export const createAiRoutes = (repo: Repository): Router => {
   router.post("/summarize/selection", async (req: AuthenticatedRequest, res, next) => {
     try {
       const body = selectionSchema.parse(req.body);
-      const { texts, sourceCount } = await repo.collectSummarySources({
+      const { texts, sourceCount, summarizeLanguage } = await repo.collectSummarySources({
         userId: req.authUserId!,
         noteIds: body.noteIds,
         folderIds: body.folderIds,
       });
       if (texts.length === 0) return res.status(400).json({ error: "No source notes found for selected inputs." });
-      const summary = await summarizeSourceTexts(texts, { outputLanguage: body.outputLanguage });
+      const outputLanguage = body.outputLanguage ?? summarizeLanguage ?? undefined;
+      const summary = await summarizeSourceTexts(texts, { outputLanguage });
+      const createdLanguage = outputLanguage?.trim() || "English";
       const created = await repo.createNote({
         userId: req.authUserId!,
         title: body.title,
         directoryPath: body.outputDirectory,
         rawText: summary,
         aiSummary: summary,
-        language: "English",
+        language: createdLanguage,
         durationSeconds: 0,
         sourceType: "generated_summary",
         generatedFromCount: sourceCount,

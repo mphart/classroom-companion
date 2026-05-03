@@ -246,7 +246,8 @@ export function attachTranscriptionWss(server: http.Server, partial?: Partial<Tr
           clientWs.send(
             JSON.stringify({
               type: "error",
-              message: "Live translation is not configured (GLADIO_API_KEY for Gladia).",
+              message:
+                "Live translation requires GLADIO_API_KEY (Gladia). English uses Deepgram only; other languages use Gladia.",
             }),
           );
         }

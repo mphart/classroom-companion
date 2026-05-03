@@ -171,10 +171,18 @@ export class InMemoryRepository implements Repository {
 
     folderNoteIds.forEach((id) => selectedNoteIds.add(id));
 
-    const texts = [...selectedNoteIds]
-      .map((id) => this.notes.find((n) => n.itemId === id)?.rawText)
-      .filter((value): value is string => Boolean(value));
+    const pairs: { text: string; lang: string }[] = [];
+    for (const id of selectedNoteIds) {
+      const n = this.notes.find((x) => x.itemId === id);
+      const raw = n?.rawText?.trim();
+      if (!n || !raw) continue;
+      pairs.push({ text: n.rawText, lang: (n.language || "English").trim() });
+    }
+    const texts = pairs.map((p) => p.text);
+    const langs = pairs.map((p) => p.lang);
+    const unique = new Set(langs);
+    const summarizeLanguage = langs.length > 0 && unique.size === 1 ? [...unique][0]! : null;
 
-    return { texts, sourceCount: texts.length };
+    return { texts, sourceCount: texts.length, summarizeLanguage };
   }
 }

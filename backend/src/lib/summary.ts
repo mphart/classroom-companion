@@ -39,14 +39,14 @@ RULES FOR WHAT TO INCLUDE IN THE SUMMARY:
 - If the transcript is mostly non-instructional noise, say so briefly in one short note, then list only the real instructional content you can find.`;
 
 export type SummarizeOptions = {
-  /** Human-readable label (e.g. note `language` / UI dropdown) used to steer Gemini output language. */
+  /** Human-readable label (e.g. note `language` / UI dropdown) to steer Gemini output language. */
   outputLanguage?: string;
 };
 
 function outputLanguageClause(label: string | undefined): string {
   const s = label?.trim() ?? "";
   if (!s || /^english$/i.test(s)) return "";
-  return `\n\nOUTPUT LANGUAGE: Write the entire summary in ${s} (the language of the source material). Use ${s} for all headings, bullets, and emphasis. Do not write the summary in English unless ${s} is English.`;
+  return `\n\nOUTPUT LANGUAGE (mandatory): The lecture notes below are in **${s}**. Write the **entire** summary in **${s}** only — every heading, bullet, bold label, and sentence. Do not use English. If a technical term is normally kept in English in ${s} prose, you may keep that term in English.`;
 }
 
 async function generateMarkdown(modelName: string, apiKey: string, userPrompt: string): Promise<string> {

@@ -52,6 +52,7 @@ describe("Transcription WebSocket proxy", () => {
 
     attachTranscriptionWss(server, {
       getDeepgramApiKey: () => "test-deepgram-key",
+      getGladioApiKey: () => "",
       connectDeepgram: () => {
         const dg = new MockDeepgramSocket((audio) => {
           expect(Buffer.isBuffer(audio)).toBe(true);
@@ -99,7 +100,6 @@ describe("Transcription WebSocket proxy", () => {
 
   it("uses Gladia when language is not English", async () => {
     const inits: Array<{ key: string; target: string }> = [];
-    const mocks: MockDeepgramSocket[] = [];
     const repo = new InMemoryRepository();
     const app = createApp(repo);
     const server = http.createServer(app);
@@ -122,7 +122,6 @@ describe("Transcription WebSocket proxy", () => {
             },
           });
         });
-        mocks.push(g);
         return g as unknown as WebSocket;
       },
       connectDeepgram: () => {

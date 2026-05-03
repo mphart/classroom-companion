@@ -69,6 +69,13 @@ Uses **`GEMINI_API_KEY`** (same as summaries). Client sends the **recent transcr
   - Response `429`: more than one request per **12 seconds** per user (cooldown).
   - Response `503`: Gemini not configured.
 
+- `POST /ai/jargon/extract` — live **domain jargon** from a transcript **chunk** (for the recording-page glossary co-pilot). Uses **`GEMINI_API_KEY`** and **`GEMINI_MODEL`**.
+  - Request: `{ "chunkText": "<plain text, 1–4000 chars>", "alreadyFlagged"?: ["derivative", "…"], "language"?: "Spanish" }` — optional **`language`** forces definition text into that language (same convention as Session Q&A when the lecture is not in English).
+  - Response `200`: `{ "terms": [ { "term": "…", "definition": "…" } ] }` — may be an empty array.
+  - Response `400`: validation failed (e.g. empty `chunkText` after trim).
+  - Response `429`: more than one request per **8 seconds** per user (cooldown), or Gemini rate-limit message mapped to 429.
+  - Response `503`: Gemini not configured.
+
 ## Practice exams (Gemini)
 
 Server uses **`PRACTICE_API_KEY`** (not `GEMINI_API_KEY`) for generate and grade. Same `GEMINI_MODEL` applies unless you add a separate model later.

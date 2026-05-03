@@ -96,6 +96,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 ## Frontend — recording / STT
 
 - **Page:** `frontend/src/app/pages/ActiveRecording.tsx` — mic → PCM (see `frontend/src/app/lib/audioPcm16k.ts`) → WebSocket.
+- **Live glossary (jargon co-pilot):** `extractJargon` in `frontend/src/app/lib/api.ts` → **`POST /ai/jargon/extract`** — while recording, new transcript deltas (≥25 words, ~12s client gate) return domain terms + definitions; chips animate in the **Live glossary** panel (ephemeral; reset when starting a new recording). Uses **`GEMINI_API_KEY`**; server cooldown 8s per user.
 - **URL helper:** `frontend/src/app/lib/transcriptionWs.ts` — `getTranscriptionStreamUrl`, `buildConfigureMessage`.
 - **Language labels:** mapped to Deepgram codes in `frontend/src/app/lib/transcriptionLanguage.ts`.
 

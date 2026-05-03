@@ -2,8 +2,10 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app";
 import { InMemoryRepository } from "../repositories/inMemoryRepository";
+import { resetAiCooldownMapsForTest } from "../routes/aiRoutes";
 
 const bootstrap = async () => {
+  resetAiCooldownMapsForTest();
   const repo = new InMemoryRepository();
   const app = createApp(repo);
   const signup = await request(app).post("/auth/signup").send({
@@ -329,6 +331,50 @@ describe("MVP backend routes", () => {
     expect(qa.status).toBe(200);
     expect(typeof qa.body.answer).toBe("string");
     expect((qa.body.answer as string).length).toBeGreaterThan(0);
+  });
+
+  it("extracts jargon from a transcript chunk (stub in test)", async () => {
+    const { app, token } = await bootstrap();
+    const chunk =
+      "The derivative measures rate of change. We define it using a limit as h approaches zero. The tangent line gives the slope at a point.";
+    const jargon = await request(app)
+      .post("/ai/jargon/extract")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        chunkText: chunk,
+        alreadyFlagged: [],
+      });
+    expect(jargon.status).toBe(200);
+    expect(Array.isArray(jargon.body.terms)).toBe(true);
+    expect((jargon.body.terms as { term: string; definition: string }[]).length).toBeGreaterThanOrEqual(1);
+    const terms = jargon.body.terms as { term: string; definition: string }[];
+    expect(terms[0]).toHaveProperty("term");
+    expect(terms[0]).toHaveProperty("definition");
+  });
+
+  it("returns 400 for empty jargon chunkText", async () => {
+    const { app, token } = await bootstrap();
+    const jargon = await request(app)
+      .post("/ai/jargon/extract")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ chunkText: "   ", alreadyFlagged: [] });
+    expect(jargon.status).toBe(400);
+  });
+
+  it("rate-limits jargon extract with 429 within cooldown", async () => {
+    const { app, token } = await bootstrap();
+    const chunk =
+      "The derivative is the limit of the difference quotient. The power rule says the derivative of x squared is two x.";
+    const first = await request(app)
+      .post("/ai/jargon/extract")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ chunkText: chunk, alreadyFlagged: [] });
+    expect(first.status).toBe(200);
+    const second = await request(app)
+      .post("/ai/jargon/extract")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ chunkText: chunk, alreadyFlagged: [] });
+    expect(second.status).toBe(429);
   });
 
   it("moves a note into a folder", async () => {

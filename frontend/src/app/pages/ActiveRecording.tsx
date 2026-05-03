@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { toast } from 'sonner';
 import {
+  BookText,
   ChevronDown,
   ChevronUp,
   FolderOpen,
@@ -16,7 +17,14 @@ import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
 import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
-import { createFolder, createNote, listItems, sessionQaAsk, type ListedItemDto } from '@/app/lib/api';
+import {
+  createFolder,
+  createNote,
+  extractJargon,
+  listItems,
+  sessionQaAsk,
+  type ListedItemDto,
+} from '@/app/lib/api';
 import {
   extractImportantDatesFromTranscript,
   extractTranscriptSection,
@@ -44,6 +52,11 @@ const SAVE_TO_HOME_VALUE = '__library_home__';
 
 /** Must match backend `SESSION_QA_TRANSCRIPT_WINDOW` for context sent to Session Q&A. */
 const SESSION_QA_CHAR_WINDOW = 8000;
+
+/** Live glossary: minimum new words since last scan before calling `/ai/jargon/extract`. */
+const JARGON_SCAN_WORD_THRESHOLD = 25;
+/** Client-side minimum gap between jargon API calls (ms); server also enforces 8s. */
+const JARGON_CLIENT_COOLDOWN_MS = 12_000;
 
 /** Bars in the live mic spectrum meter (voice band is spread across these bins). */
 const MIC_METER_BARS = 40;
@@ -82,6 +95,10 @@ function parseInboundWords(raw: unknown): TranscriptToken[] | undefined {
     out.push({ word: o.word, confidence });
   }
   return out.length > 0 ? out : undefined;
+}
+
+function countWords(s: string): number {
+  return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function inboundToPiece(parsed: TranscriptInbound): TranscriptRichPiece | null {
@@ -127,6 +144,11 @@ export function ActiveRecording() {
   const [sessionQaMessages, setSessionQaMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [micSpectrum, setMicSpectrum] = useState<number[]>(() => Array.from({ length: MIC_METER_BARS }, () => 0));
 
+  const [jargonOpen, setJargonOpen] = useState(true);
+  const [jargonTerms, setJargonTerms] = useState<{ term: string; definition: string; addedAt: number }[]>([]);
+  const [jargonLoading, setJargonLoading] = useState(false);
+  const [expandedJargonKey, setExpandedJargonKey] = useState<string | null>(null);
+
   const transcriptionWsRef = useRef<WebSocket | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -140,6 +162,12 @@ export function ActiveRecording() {
   const isPausedRef = useRef(false);
   const transcriptCommittedPiecesRef = useRef<TranscriptRichPiece[]>([]);
   const transcriptPartialPieceRef = useRef<TranscriptRichPiece | null>(null);
+
+  const lastJargonScanLenRef = useRef(0);
+  const lastJargonCallAtRef = useRef(0);
+  const jargonInFlightRef = useRef(false);
+  const jargonTermsRef = useRef(jargonTerms);
+  jargonTermsRef.current = jargonTerms;
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -248,6 +276,50 @@ export function ActiveRecording() {
     if (!t) return '';
     return t.length <= SESSION_QA_CHAR_WINDOW ? t : t.slice(-SESSION_QA_CHAR_WINDOW);
   }, [fullTranscriptPlain]);
+
+  useEffect(() => {
+    if (!isRecording || isPaused) return;
+    const deltaStart = lastJargonScanLenRef.current;
+    const delta = fullTranscriptPlain.slice(deltaStart);
+    if (countWords(delta) < JARGON_SCAN_WORD_THRESHOLD) return;
+    if (Date.now() - lastJargonCallAtRef.current < JARGON_CLIENT_COOLDOWN_MS) return;
+    if (jargonInFlightRef.current) return;
+
+    const snapshotEnd = fullTranscriptPlain.length;
+    jargonInFlightRef.current = true;
+    lastJargonCallAtRef.current = Date.now();
+    setJargonLoading(true);
+
+    void (async () => {
+      try {
+        const { terms } = await extractJargon({
+          chunkText: delta,
+          alreadyFlagged: jargonTermsRef.current.map((t) => t.term),
+          language: language === 'English' ? undefined : language,
+        });
+        lastJargonScanLenRef.current = snapshotEnd;
+        if (terms.length > 0) {
+          setJargonTerms((prev) => {
+            const seen = new Set(prev.map((t) => t.term.toLowerCase()));
+            const now = Date.now();
+            const next = [...prev];
+            for (const t of terms) {
+              const key = t.term.toLowerCase();
+              if (seen.has(key)) continue;
+              seen.add(key);
+              next.push({ term: t.term, definition: t.definition, addedAt: now });
+            }
+            return next;
+          });
+        }
+      } catch {
+        /* background scan — no toast */
+      } finally {
+        jargonInFlightRef.current = false;
+        setJargonLoading(false);
+      }
+    })();
+  }, [fullTranscriptPlain, isRecording, isPaused, language]);
 
   useEffect(() => {
     transcriptCommittedPiecesRef.current = transcriptCommittedPieces;
@@ -456,6 +528,12 @@ export function ActiveRecording() {
     transcriptPartialPieceRef.current = null;
     setSessionQaMessages([]);
     setSessionQaInput('');
+    setJargonTerms([]);
+    setJargonLoading(false);
+    setExpandedJargonKey(null);
+    lastJargonScanLenRef.current = 0;
+    lastJargonCallAtRef.current = 0;
+    jargonInFlightRef.current = false;
     setSttStatus({ kind: 'connecting' });
     setElapsedTime(0);
     setIsRecording(true);
@@ -944,6 +1022,91 @@ export function ActiveRecording() {
                   partial={transcriptPartialPiece}
                 />
               )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card/95 p-4 shadow-sm backdrop-blur-sm dark:bg-card/90">
+              <button
+                type="button"
+                onClick={() => setJargonOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg text-left transition-colors hover:bg-muted/40"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-foreground">
+                  <BookText className="size-4 shrink-0 text-[var(--brand)]" aria-hidden />
+                  Live glossary
+                  {jargonTerms.length > 0 ? (
+                    <span className="ml-1 shrink-0 rounded-full bg-[var(--brand-soft-bg)] px-2 py-0.5 text-[0.65rem] font-medium text-[var(--brand-deep)] dark:text-[var(--brand)]">
+                      {jargonTerms.length} term{jargonTerms.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                  {jargonLoading ? (
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
+                  ) : null}
+                </span>
+                {jargonOpen ? (
+                  <ChevronUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                ) : (
+                  <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                )}
+              </button>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Domain jargon from the live transcript appears as chips with one-line definitions. In-memory only —
+                clears when you start a new recording. Scans about every {JARGON_CLIENT_COOLDOWN_MS / 1000}s when at
+                least {JARGON_SCAN_WORD_THRESHOLD} new words arrive.
+              </p>
+
+              {jargonOpen ? (
+                <div className="mt-3">
+                  {!isRecording ? (
+                    <p className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                      Start recording to see terms appear here as you speak.
+                    </p>
+                  ) : isPaused ? (
+                    <p className="rounded-lg border border-border/80 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                      Resume recording for live glossary scans.
+                    </p>
+                  ) : jargonTerms.length === 0 && !jargonLoading ? (
+                    <p className="rounded-lg border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+                      Jargon will appear here as the lecture progresses.
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <AnimatePresence mode="popLayout">
+                      {jargonTerms.map((item) => {
+                        const key = `${item.term}::${item.addedAt}`;
+                        const expanded = expandedJargonKey === key;
+                        return (
+                          <motion.div
+                            key={key}
+                            layout
+                            initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={reduceMotion ? undefined : { opacity: 0, x: -10 }}
+                            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+                            className="min-w-0 max-w-full"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setExpandedJargonKey((k) => (k === key ? null : key))}
+                              className={
+                                expanded
+                                  ? 'w-full max-w-full rounded-xl border border-[var(--brand)]/40 bg-[var(--brand-soft-bg)] px-3 py-2 text-left shadow-sm transition-colors'
+                                  : 'max-w-full rounded-full border border-border bg-background/95 px-3 py-1.5 text-left text-sm font-medium text-foreground shadow-sm transition-colors hover:border-[var(--brand)]/45 hover:bg-muted/40'
+                              }
+                            >
+                              <span className="block truncate">{item.term}</span>
+                              {expanded ? (
+                                <span className="mt-1.5 block text-xs font-normal leading-snug text-muted-foreground">
+                                  {item.definition}
+                                </span>
+                              ) : null}
+                            </button>
+                          </motion.div>
+                        );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-xl border border-border bg-card/95 p-4 shadow-sm backdrop-blur-sm dark:bg-card/90">

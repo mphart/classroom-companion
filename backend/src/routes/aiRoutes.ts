@@ -6,6 +6,7 @@ import {
   gradeShortAnswers,
   parseExamDocument,
 } from "../lib/practiceExam";
+import { extractJargonTerms } from "../lib/jargonExtractor";
 import { answerSessionQuestion } from "../lib/sessionQa";
 import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { summarizeSourceTexts } from "../lib/summary";
@@ -61,9 +62,28 @@ const sessionQaSchema = z.object({
   language: z.string().trim().max(80).optional(),
 });
 
+const jargonExtractSchema = z.object({
+  chunkText: z.preprocess(
+    (val) => (typeof val === "string" ? val.trim() : val),
+    z.string().min(1).max(4000),
+  ),
+  alreadyFlagged: z.array(z.string().max(200)).max(200).default([]),
+  language: z.string().trim().max(80).optional(),
+});
+
 /** Per-user cooldown between Session Q&A requests (ms). */
 const SESSION_QA_COOLDOWN_MS = 12_000;
 const sessionQaLastRequestAt = new Map<number, number>();
+
+/** Per-user cooldown between live jargon extraction requests (ms). */
+const JARGON_COOLDOWN_MS = 8_000;
+const jargonLastRequestAt = new Map<number, number>();
+
+/** Clears in-memory AI cooldowns (used by tests: each `bootstrap()` uses a fresh repo but user ids repeat). */
+export function resetAiCooldownMapsForTest(): void {
+  sessionQaLastRequestAt.clear();
+  jargonLastRequestAt.clear();
+}
 
 export const createAiRoutes = (repo: Repository): Router => {
   const router = Router();
@@ -235,6 +255,29 @@ export const createAiRoutes = (repo: Repository): Router => {
         language: body.language,
       });
       return res.json({ answer });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/jargon/extract", async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const body = jargonExtractSchema.parse(req.body);
+      const uid = req.authUserId!;
+      const now = Date.now();
+      const last = jargonLastRequestAt.get(uid) ?? 0;
+      if (now - last < JARGON_COOLDOWN_MS) {
+        const waitSec = Math.ceil((JARGON_COOLDOWN_MS - (now - last)) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before another jargon scan.` });
+      }
+      jargonLastRequestAt.set(uid, now);
+
+      const { terms } = await extractJargonTerms({
+        chunkText: body.chunkText,
+        alreadyFlagged: body.alreadyFlagged,
+        language: body.language,
+      });
+      return res.json({ terms });
     } catch (error) {
       return next(error);
     }

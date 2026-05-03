@@ -27,6 +27,7 @@ Web app for recording lectures, organizing courses and notes, **live speech-to-t
 ### Recording extras (browser)
 
 - **Session Q&A** — While recording, open **Session Q&A** under the live transcript, type a question, and tap **Ask**. Answers use only the **recent transcript window** (Gemini; same `GEMINI_API_KEY` as summaries). About **one question every 12 seconds** per user to limit cost.
+- **Live glossary (jargon co-pilot)** — While recording, **Live glossary** scans new transcript chunks and surfaces **domain jargon** as chips with one-line definitions (Gemini; same `GEMINI_API_KEY`). Ephemeral during the session; roughly **one scan every ~12 seconds** when enough new words arrive (server also rate-limits).
 - After saving a recording, the app **scans the transcript** for exam/due-date phrases (heuristic) and can show **important dates** on the **calendar** view and a one-time **alert** (stored in **localStorage** in the browser—best-effort, confirm dates with your syllabus).
 
 ### API keys (see below)

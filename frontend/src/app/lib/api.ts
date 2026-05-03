@@ -231,6 +231,15 @@ export async function sessionQaAsk(body: {
   return apiPost('/ai/session-qa', body) as Promise<{ answer: string }>;
 }
 
+/** Live lecture jargon glossary — recent transcript chunk + Gemini (`GEMINI_API_KEY`). */
+export async function extractJargon(body: {
+  chunkText: string;
+  alreadyFlagged: string[];
+  language?: string;
+}): Promise<{ terms: { term: string; definition: string }[] }> {
+  return apiPost('/ai/jargon/extract', body) as Promise<{ terms: { term: string; definition: string }[] }>;
+}
+
 export async function generatePracticeExam(body: {
   noteIds: number[];
   folderIds: number[];

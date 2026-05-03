@@ -24,6 +24,31 @@ function localFallbackSummary(texts: string[]): string {
   return `Summary:\n\n${firstChunk}${merged.length > 900 ? "..." : ""}`;
 }
 
+/**
+ * Speech-to-text often captures the whole room. Summaries should reflect instructor-led teaching only.
+ */
+const INSTRUCTOR_FOCUS_INSTRUCTIONS = `INPUT: Raw transcript(s) from a live class. Audio may include BOTH:
+- The **professor / primary instructor** (lecture, explanations, examples, assignments, exam guidance)
+- **Students and others** (questions, side conversation, group talk, laughter, overlapping speech, or noise mis-heard as words)
+
+RULES FOR WHAT TO INCLUDE IN THE SUMMARY:
+- **Include** instructional content: definitions, derivations, procedures, worked examples, frameworks, dates/deadlines the instructor states, “this will be on the exam”, key takeaways, and answers the instructor gives to the class.
+- **Exclude** casual student chat, off-topic banter, private conversations, filler (“yeah”, “lol”), and rambling that does not advance the lesson—unless the instructor explicitly uses it to teach.
+- When it is unclear who is speaking, **prefer** segments that sound like structured teaching (definitions, numbered lists, “the important point is…”) over informal back-and-forth.
+- **Do not invent** facts; only summarize what is clearly tied to the lesson in the text.
+- If the transcript is mostly non-instructional noise, say so briefly in one short note, then list only the real instructional content you can find.`;
+
+export type SummarizeOptions = {
+  /** Human-readable label (e.g. note `language` / UI dropdown) used to steer Gemini output language. */
+  outputLanguage?: string;
+};
+
+function outputLanguageClause(label: string | undefined): string {
+  const s = label?.trim() ?? "";
+  if (!s || /^english$/i.test(s)) return "";
+  return `\n\nOUTPUT LANGUAGE: Write the entire summary in ${s} (the language of the source material). Use ${s} for all headings, bullets, and emphasis. Do not write the summary in English unless ${s} is English.`;
+}
+
 async function generateMarkdown(modelName: string, apiKey: string, userPrompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
@@ -39,7 +64,7 @@ async function generateMarkdown(modelName: string, apiKey: string, userPrompt: s
  * Turn one or many note bodies into Markdown study notes.
  * Uses Google Gemini when `GEMINI_API_KEY` is set; uses a tiny local stub during tests only.
  */
-export async function summarizeSourceTexts(texts: string[]): Promise<string> {
+export async function summarizeSourceTexts(texts: string[], options?: SummarizeOptions): Promise<string> {
   const filtered = texts.map((t) => t.trim()).filter(Boolean);
   if (filtered.length === 0) {
     throw new SummarizerError("No text content to summarize.", 400);
@@ -59,18 +84,22 @@ export async function summarizeSourceTexts(texts: string[]): Promise<string> {
   }
 
   const corpus = filtered.map((t, i) => `### Source ${i + 1}\n${t}`).join("\n\n---\n\n");
+  const langExtra = outputLanguageClause(options?.outputLanguage);
 
   const summarizeBlock = (block: string, instruction: string) =>
-    generateMarkdown(getModelName(), apiKey, `${instruction}\n\n---\n\n${block}`);
+    generateMarkdown(getModelName(), apiKey, `${instruction}${langExtra}\n\n---\n\n${block}`);
 
   try {
     if (corpus.length <= CHUNK_CHARS) {
       return await summarizeBlock(
         corpus,
-        `You summarize classroom lecture transcripts and notes into cohesive study material.
+        `${INSTRUCTOR_FOCUS_INSTRUCTIONS}
+
+TASK: Turn the instructional parts of the material below into cohesive student study notes.
 Respond ONLY in Markdown (headings, bullets, bold key terms).
 
-Cover main ideas, definitions, anything the lecturer emphasized as exam-worthy, and 3–5 concrete takeaways.
+Cover main ideas, definitions, anything the instructor emphasized as exam-worthy, and 3–5 concrete takeaways.
+Ignore non-instructional chatter per the rules above.
 
 Material to summarize:`,
       );
@@ -86,14 +115,20 @@ Material to summarize:`,
       partials.push(
         await summarizeBlock(
           chunk,
-          "Summarize this portion briefly in Markdown-focused bullet notes for a later merge pass.",
+          `${INSTRUCTOR_FOCUS_INSTRUCTIONS}
+
+Summarize ONLY the professor/instructor-led teaching in this portion. Omit student small talk and off-topic lines.
+Output brief Markdown bullet notes for a later merge pass (no preamble).`,
         ),
       );
     }
 
     return await summarizeBlock(
       partials.join("\n\n---\n\n"),
-      `Merge partial summaries into one polished Markdown doc for students. Remove redundancy, keep structure.`,
+      `${INSTRUCTOR_FOCUS_INSTRUCTIONS}
+
+Merge the partial notes below into one polished Markdown study guide for students.
+Remove redundancy; keep only instructor-relevant content; drop any stray chatter that slipped through.`,
     );
   } catch (error) {
     if (error instanceof SummarizerError) throw error;

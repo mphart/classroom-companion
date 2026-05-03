@@ -67,9 +67,6 @@ export function Viewer() {
           : 'Saved lecture note'
         : '';
 
-  const contentHeading =
-    note?.sourceType === 'generated_summary' ? 'Gemini-generated summary (full text)' : 'Note contents';
-
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       <div className="w-80 shrink-0 bg-card border-r border-border">
@@ -132,20 +129,33 @@ export function Viewer() {
               {!loading && !error && note ? (
                 <div className="space-y-6">
                   <h1 className="text-3xl mt-2">{note.title}</h1>
-                  {note.aiSummary ? (
+                  {note.sourceType === 'generated_summary' ? (
                     <div>
                       <h2 className="text-2xl mb-3">AI summary</h2>
                       <div className="rounded-lg border border-border bg-muted/20 p-6">
-                        <MarkdownPreview markdown={note.aiSummary} />
+                        <MarkdownPreview
+                          markdown={(note.aiSummary ?? note.rawText).trim() || '_No summary content._'}
+                        />
                       </div>
                     </div>
-                  ) : null}
-                  <div>
-                    <h2 className="text-2xl mb-3">{contentHeading}</h2>
-                    <div className="rounded-lg border border-border bg-muted/10 p-6">
-                      <MarkdownPreview markdown={note.rawText} />
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {note.aiSummary ? (
+                        <div>
+                          <h2 className="text-2xl mb-3">AI summary</h2>
+                          <div className="rounded-lg border border-border bg-muted/20 p-6">
+                            <MarkdownPreview markdown={note.aiSummary} />
+                          </div>
+                        </div>
+                      ) : null}
+                      <div>
+                        <h2 className="text-2xl mb-3">Note contents</h2>
+                        <div className="rounded-lg border border-border bg-muted/10 p-6">
+                          <MarkdownPreview markdown={note.rawText} />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>

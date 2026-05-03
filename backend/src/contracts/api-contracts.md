@@ -47,8 +47,9 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `POST /ai/summarize/note/:noteId`
   - Response `200`: `{ "note": { ...with aiSummary populated... } }`
 - `POST /ai/summarize/selection`
-  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary" }`
+  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary", "outputLanguage"?: "Spanish" }` (optional; defaults to English-only instructions when omitted)
   - Response `201`: `{ "note": { ...sourceType: "generated_summary"... }, "sourceCount": 5 }`
+  - Single-note summarize uses the stored note’s `language` field to steer Gemini output.
 
 ## Realtime Speech-to-Text (WebSocket)
 
@@ -56,7 +57,7 @@ Browser connects **after login** — same JWT as REST, passed as query string (*
 
 - **URL**: `ws://<host>:<port>/transcription/stream?token=<jwt>`
   - Frontend may set **`VITE_WS_URL`** explicitly, or derive from **`VITE_API_URL`** (replace `http` → `ws`, `https` → `wss`). If both are unset (typical Docker+Nginx build), the client uses **`ws(s)://<same host:port as the page>`** (e.g. `ws://localhost:8080`) and Nginx must proxy **`/transcription/stream`** to **`api:4000`** with WebSocket upgrade headers.
-- **Server env**: **`DEEPGRAM_API_KEY`** (required for live transcription). Optional: **`DG_MODEL`** (default `nova-2`), **`DG_ENDPOINTING_MS`** (milliseconds), **`DEEPGRAM_WS_HOST`** (override base, default `wss://api.deepgram.com`).
+- **Server env**: **`DEEPGRAM_API_KEY`** (required when the configured language is **English** — Deepgram realtime STT). **`GLADIO_API_KEY`** (or **`GLADIA_API_KEY`**) — [Gladia](https://gladia.io) API key for **non‑English** lecture languages (live speech → translated text in the selected language). Optional: **`DG_MODEL`**, **`DG_ENDPOINTING_MS`**, **`DEEPGRAM_WS_HOST`**.
 
 After connect:
 

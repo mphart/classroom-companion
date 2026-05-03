@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
+import { motion, useReducedMotion } from 'motion/react';
+import { FolderOpen, Languages, Mic, Sparkles } from 'lucide-react';
 import cornerLogo from '@/assets/corner-logo.svg';
+import '@/styles/brand-ambient.css';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
 import { floatToPCM16 } from '@/app/lib/audioPcm16k';
 import { getSessionUser, getToken } from '@/app/lib/authSession';
+import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
 import { buildConfigureMessage, getTranscriptionStreamUrl } from '@/app/lib/transcriptionWs';
 import {
@@ -51,6 +55,7 @@ function inboundToPiece(parsed: TranscriptInbound): TranscriptRichPiece | null {
 
 export function ActiveRecording() {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const sessionUser = getSessionUser();
   const userId = sessionUser?.id ?? null;
 
@@ -467,9 +472,28 @@ export function ActiveRecording() {
     return <Navigate to="/" replace />;
   }
 
+  const firstName = firstNameFromDisplayName(sessionUser.name);
+  const dayGreet = timeOfDayGreeting();
+  const profileInitials = userInitials(sessionUser.name, sessionUser.username);
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
-      <div className="w-80 bg-card border-r border-border p-6 flex flex-col">
+    <div className="relative flex min-h-screen overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
+        <div
+          className="brand-ambient-blob-a absolute -left-[20%] top-[-15%] h-[min(50vmin,22rem)] w-[min(50vmin,22rem)] rounded-full bg-[var(--brand)] opacity-[0.08] blur-[3.5rem]"
+          style={{ animationDelay: '-2s' }}
+        />
+        <div
+          className="brand-ambient-blob-b absolute -right-[10%] bottom-[10%] h-[min(45vmin,20rem)] w-[min(45vmin,20rem)] rounded-full bg-[var(--brand-deep)] opacity-[0.07] blur-[3rem]"
+          style={{ animationDelay: '-5s' }}
+        />
+        <div
+          className="brand-ambient-blob-c absolute left-[30%] top-[35%] h-[min(38vmin,16rem)] w-[min(38vmin,16rem)] rounded-full bg-[var(--brand)] opacity-[0.06] blur-[3.5rem]"
+          style={{ animationDelay: '-1s' }}
+        />
+      </div>
+
+      <div className="relative z-10 flex w-80 shrink-0 flex-col border-r border-border bg-card/95 p-6 backdrop-blur-sm dark:bg-card/90">
         <button
           type="button"
           onClick={() => navigate('/home')}
@@ -489,6 +513,50 @@ export function ActiveRecording() {
             <span className="mt-0.5 block truncate text-xs text-muted-foreground">Home</span>
           </div>
         </button>
+
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-5 rounded-xl border border-border bg-gradient-to-br from-[var(--brand-soft-bg)] to-transparent p-3"
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
+              style={{ backgroundColor: 'var(--brand)' }}
+            >
+              {profileInitials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">{dayGreet}</p>
+              <p className="truncate text-sm font-medium text-foreground">This session is yours, {firstName}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Set course & language, then capture your notes and live transcript in one place.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.38, delay: reduceMotion ? 0 : 0.05, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-6 space-y-2 rounded-xl border border-dashed border-[var(--brand-soft-border)] bg-muted/20 px-3 py-3 text-xs"
+        >
+          <p className="font-medium text-foreground">Lecture snapshot</p>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Mic className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+            <span className="truncate font-medium text-foreground">{lectureName || 'Untitled lecture'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Languages className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+            <span>{language}</span>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <FolderOpen className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+            <span className="truncate">{selectedCourse || 'Pick a course folder'}</span>
+          </div>
+        </motion.div>
 
         <div className="flex-1 space-y-6">
           <div>
@@ -568,10 +636,14 @@ export function ActiveRecording() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="bg-card border-b border-border p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-xl">Enter Notes</h2>
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <div className="border-b border-border bg-card/95 p-6 backdrop-blur-sm dark:bg-card/90">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Side notes</p>
+              <h2 className="text-xl font-semibold tracking-tight">Jot while you listen, {firstName}</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">Quick bullets — your transcript builds below.</p>
+            </div>
             <ThemeToggle />
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -591,18 +663,27 @@ export function ActiveRecording() {
           </div>
         </div>
 
-        <div className="flex-1 p-6 overflow-y-auto">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-card rounded-lg shadow-sm border border-border p-6 min-h-96">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-4xl">
+            <div className="min-h-96 rounded-xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur-sm dark:bg-card/90">
+              <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+                <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+                <span>Live transcript for this room</span>
+              </div>
               {sttStatus.kind !== 'idle' && sttStatus.kind !== 'live' ? (
-                <p className="text-sm text-amber-600 dark:text-amber-500 mb-2">
+                <p className="mb-2 text-sm text-amber-600 dark:text-amber-500">
                   {sttStatus.kind === 'connecting' && 'Connecting to transcription…'}
                   {sttStatus.kind === 'error' &&
                     `Transcription issue: ${sttStatus.message ?? 'Unknown error'}. You can still finish and save notes.`}
                 </p>
               ) : null}
               {!fullTranscriptPlain ? (
-                <p className="text-muted-foreground">Click Start to begin recording...</p>
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
+                  <p className="text-sm font-medium text-foreground">Ready when you are, {firstName}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    When you&apos;re settled, tap <span className="font-medium text-[var(--brand-deep)] dark:text-[var(--brand)]">Start Recording</span> — words will stream here as you teach.
+                  </p>
+                </div>
               ) : (
                 <TranscriptConfidenceText
                   committed={transcriptCommittedPieces}
@@ -613,8 +694,8 @@ export function ActiveRecording() {
           </div>
         </div>
 
-        <div className="bg-card border-t border-border p-6">
-          <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
+        <div className="border-t border-border bg-card/95 p-6 backdrop-blur-sm dark:bg-card/90">
+          <div className="mx-auto flex max-w-4xl items-center justify-center gap-4">
             {!isRecording ? (
               <button
                 type="button"

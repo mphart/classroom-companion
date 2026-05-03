@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Calendar, ChevronLeft, ChevronRight, Clipboard, LayoutGrid, Pencil } from 'lucide-react';
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Clipboard,
+  LayoutGrid,
+  Library,
+  Pencil,
+  Sparkles,
+} from 'lucide-react';
 import '@/styles/brand-ambient.css';
 import logo from '@/assets/corner-logo.svg';
 import {
@@ -24,6 +33,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import { clearSession, getSessionUser } from '@/app/lib/authSession';
+import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
 import {
   joinDirectory,
   parentDirectory,
@@ -413,6 +423,10 @@ export function Home() {
   }
 
   const pathSegments = pathTitleSegments(currentDirectory, userId);
+  const firstName = firstNameFromDisplayName(sessionUser.name);
+  const dayGreeting = timeOfDayGreeting();
+  const profileInitials = userInitials(sessionUser.name, sessionUser.username);
+  const browseLocationLabel = pathSegments.join(' / ');
 
   const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
   const calYear = calendarVisibleMonth.getFullYear();
@@ -498,17 +512,22 @@ export function Home() {
               <motion.button
                 type="button"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="w-10 h-10 rounded-full text-white flex items-center justify-center"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
                 style={{ backgroundColor: 'var(--brand)' }}
                 whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+                aria-label={`Account menu for ${sessionUser.name}`}
               >
-                U
+                {profileInitials}
               </motion.button>
               {showProfileMenu && (
-                <div className="absolute top-full right-0 mt-2 bg-card border border-border rounded-lg shadow-lg py-2 w-40 z-10">
+                <div className="absolute top-full right-0 z-10 mt-2 w-52 rounded-lg border border-border bg-card py-2 shadow-lg">
+                  <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">{sessionUser.name}</p>
+                    <p>@{sessionUser.username}</p>
+                  </div>
                   <button
                     onClick={() => handleLogout()}
-                    className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
+                    className="w-full px-4 py-2 text-left hover:bg-accent hover:text-accent-foreground"
                   >
                     Logout
                   </button>
@@ -580,6 +599,50 @@ export function Home() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: reduceMotion ? 0 : 0.12, ease: [0.22, 1, 0.36, 1] }}
       >
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.42, delay: reduceMotion ? 0 : 0.06, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-6 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-[var(--brand-soft-bg)] via-card to-card shadow-sm"
+        >
+          <div
+            className="h-1 w-full opacity-90"
+            style={{
+              background: `linear-gradient(90deg, transparent, var(--brand), var(--brand-hover), transparent)`,
+            }}
+          />
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white shadow-md ring-1 ring-black/5 dark:ring-white/10"
+                style={{ backgroundColor: 'var(--brand)' }}
+                aria-hidden
+              >
+                {profileInitials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{dayGreeting}</p>
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">Hi, {firstName}</h2>
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                  <span className="text-foreground/80">@{sessionUser.username}</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="text-foreground/90">{browseLocationLabel}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs sm:justify-end">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm dark:bg-background/40">
+                <Library className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+                {loading ? 'Loading…' : `${items.length} item${items.length === 1 ? '' : 's'} here`}
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm dark:bg-background/40">
+                <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+                Capture a lecture from + New
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
         {error ? (
           <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}

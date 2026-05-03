@@ -95,5 +95,35 @@ describe("MVP backend routes", () => {
     expect(summarizeSelection.status).toBe(201);
     expect(summarizeSelection.body.note.sourceType).toBe("generated_summary");
     expect(summarizeSelection.body.sourceCount).toBeGreaterThanOrEqual(2);
+    expect(summarizeSelection.body.note.language).toBe("English");
+  });
+
+  it("selection summary inherits language when all sources share it", async () => {
+    const { app, token } = await bootstrap();
+    const a = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "A",
+      directory: "1/",
+      rawText: "Primera parte de la clase.",
+      language: "Spanish",
+      durationSeconds: 60,
+    });
+    const b = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "B",
+      directory: "1/",
+      rawText: "Segunda parte de la clase.",
+      language: "Spanish",
+      durationSeconds: 60,
+    });
+    const sel = await request(app)
+      .post("/ai/summarize/selection")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteIds: [a.body.note.id, b.body.note.id],
+        folderIds: [],
+        outputDirectory: "1/",
+        title: "Resumen",
+      });
+    expect(sel.status).toBe(201);
+    expect(sel.body.note.language).toBe("Spanish");
   });
 });

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildListenUrl, normalizeDeepgramServerMessage, normalizeLanguageCode } from "../lib/deepgramLive";
+import {
+  buildListenUrl,
+  normalizeDeepgramServerMessage,
+  normalizeLanguageCode,
+  pickDeepgramFirstAlternative,
+} from "../lib/deepgramLive";
 
 describe("deepgramLive", () => {
   it("normalizeLanguageCode maps UI labels", () => {
@@ -20,6 +25,7 @@ describe("deepgramLive", () => {
       expect(url).toContain("channels=1");
       expect(url).toContain("interim_results=true");
       expect(url).toContain("smart_format=true");
+      expect(url).toContain("words=true");
       expect(url).toContain("language=en");
       expect(url).toContain("model=nova-2-test");
     } finally {
@@ -56,5 +62,58 @@ describe("deepgramLive", () => {
 
   it("normalizeDeepgramServerMessage returns null for empty transcript", () => {
     expect(normalizeDeepgramServerMessage({ channel: { alternatives: [{ transcript: "   " }] }, is_final: false })).toBeNull();
+  });
+
+  it("normalizeDeepgramServerMessage ignores Metadata frames", () => {
+    expect(
+      normalizeDeepgramServerMessage({
+        type: "Metadata",
+        metadata: { request_id: "x" },
+      }),
+    ).toBeNull();
+  });
+
+  it("pickDeepgramFirstAlternative reads channels[0] when present", () => {
+    const alt = pickDeepgramFirstAlternative({
+      type: "Results",
+      is_final: true,
+      channels: [
+        {
+          alternatives: [
+            {
+              transcript: "hello",
+              words: [{ word: "hello", confidence: 0.91, start: 0, end: 0.5 }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(alt?.transcript).toBe("hello");
+    expect(alt?.words?.length).toBe(1);
+  });
+
+  it("normalizeDeepgramServerMessage forwards word confidences", () => {
+    const msg = {
+      channel: {
+        alternatives: [
+          {
+            transcript: "Hello world.",
+            words: [
+              { punctuated_word: "Hello", confidence: 0.99, start: 0, end: 0.3 },
+              { punctuated_word: "world.", confidence: 0.62, start: 0.35, end: 0.7 },
+            ],
+          },
+        ],
+      },
+      is_final: false,
+    };
+    expect(normalizeDeepgramServerMessage(msg)).toEqual({
+      type: "partial",
+      text: "Hello world.",
+      words: [
+        { word: "Hello", confidence: 0.99 },
+        { word: "world.", confidence: 0.62 },
+      ],
+    });
   });
 });

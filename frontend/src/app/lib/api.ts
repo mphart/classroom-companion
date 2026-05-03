@@ -135,6 +135,8 @@ export async function summarizeSelection(body: {
   folderIds: number[];
   outputDirectory: string;
   title: string;
+  /** When set, forces Gemini output language; otherwise the API infers it when all sources share one language. */
+  outputLanguage?: string;
 }): Promise<{ note: NoteDto; sourceCount: number }> {
   return apiPost('/ai/summarize/selection', body) as Promise<{ note: NoteDto; sourceCount: number }>;
 }

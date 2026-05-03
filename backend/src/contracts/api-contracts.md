@@ -47,7 +47,7 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `POST /ai/summarize/note/:noteId`
   - Response `200`: `{ "note": { ...with aiSummary populated... } }`
 - `POST /ai/summarize/selection`
-  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary" }`
+  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary", "outputLanguage"?: "Spanish" }` — optional **`outputLanguage`** overrides inference; if omitted and **every** source note shares the same `language`, Gemini uses that language and the new note’s `language` field is set accordingly (otherwise defaults to English).
   - Response `201`: `{ "note": { ...sourceType: "generated_summary"... }, "sourceCount": 5 }`
 
 ## Realtime Speech-to-Text (WebSocket)
@@ -56,18 +56,18 @@ Browser connects **after login** — same JWT as REST, passed as query string (*
 
 - **URL**: `ws://<host>:<port>/transcription/stream?token=<jwt>`
   - Frontend may set **`VITE_WS_URL`** explicitly, or derive from **`VITE_API_URL`** (replace `http` → `ws`, `https` → `wss`). If both are unset (typical Docker+Nginx build), the client uses **`ws(s)://<same host:port as the page>`** (e.g. `ws://localhost:8080`) and Nginx must proxy **`/transcription/stream`** to **`api:4000`** with WebSocket upgrade headers.
-- **Server env**: **`DEEPGRAM_API_KEY`** (required for live transcription). Optional: **`DG_MODEL`** (default `nova-2`), **`DG_ENDPOINTING_MS`** (milliseconds), **`DEEPGRAM_WS_HOST`** (override base, default `wss://api.deepgram.com`).
+- **Server env**: **`DEEPGRAM_API_KEY`** when `configure.language` is **`en`** (Deepgram STT). **`GLADIO_API_KEY`** (alias **`GLADIA_API_KEY`**) when language is **not** `en` — [Gladia](https://gladia.io) live **translation** into that code. Optional: **`DG_MODEL`**, **`DG_ENDPOINTING_MS`**, **`DEEPGRAM_WS_HOST`**.
 
 After connect:
 
-1. **Optional text** (`UTF-8` JSON): `{ "type": "configure", "language": "en" }` — Deepgram/BCP‑47-ish code (`en`, `es`, …). Must arrive **before** any audio if you rely on language for the first utterance (see implementation).
+1. **Optional text** (`UTF-8` JSON): `{ "type": "configure", "language": "en" }` — BCP‑47-ish code (`en`, `es`, …). **`en`** → Deepgram; **other** → Gladia with translation into that language. Send **before** the first audio chunk you care about (see implementation).
 2. **Binary**: PCM **signed 16‑bit little-endian**, **mono**, **16000 Hz** (`linear16` / “telephony PCM” framing — raw samples only, **no WAV header**).
 3. **Stop**: text `{ "type": "stop" }` or close the socket.
 
 **Downstream transcript events** (JSON text frames from backend):
 
-- `{ "type": "partial", "text": "...", "start"?: number, "duration"?: number }`
-- `{ "type": "final", "text": "...", "start"?: number, "duration"?: number }`
+- `{ "type": "partial", "text": "...", "start"?: number, "duration"?: number, "words"?: [{ "word": "...", "confidence": 0.94 }] }` — when upstream is **Deepgram** with `words=true`, `words` mirrors per-token confidence (0–1) for live highlighting.
+- `{ "type": "final", "text": "...", "start"?: number, "duration"?: number, "words"?: [...] }`
 - `{ "type": "error", "message": "..." }`
 
 ## Error Envelope

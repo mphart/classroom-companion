@@ -10,6 +10,7 @@ const selectionSchema = z.object({
   folderIds: z.array(z.number().int().positive()).default([]),
   outputDirectory: z.string().trim().min(1),
   title: z.string().trim().min(1).max(180).default("Generated Summary"),
+  outputLanguage: z.string().trim().min(1).max(80).optional(),
 });
 
 export const createAiRoutes = (repo: Repository): Router => {
@@ -21,7 +22,7 @@ export const createAiRoutes = (repo: Repository): Router => {
       const noteId = z.coerce.number().int().positive().parse(req.params.noteId);
       const found = await repo.getNoteById({ userId: req.authUserId!, itemId: noteId });
       if (!found) return res.status(404).json({ error: "Note not found." });
-      const summary = await summarizeSourceTexts([found.note.rawText]);
+      const summary = await summarizeSourceTexts([found.note.rawText], { outputLanguage: found.note.language });
       const updated = await repo.updateNoteSummary({ userId: req.authUserId!, itemId: noteId, summary });
       return res.json({ note: mapNoteResponse(updated) });
     } catch (error) {
@@ -32,20 +33,22 @@ export const createAiRoutes = (repo: Repository): Router => {
   router.post("/summarize/selection", async (req: AuthenticatedRequest, res, next) => {
     try {
       const body = selectionSchema.parse(req.body);
-      const { texts, sourceCount } = await repo.collectSummarySources({
+      const { texts, sourceCount, summarizeLanguage } = await repo.collectSummarySources({
         userId: req.authUserId!,
         noteIds: body.noteIds,
         folderIds: body.folderIds,
       });
       if (texts.length === 0) return res.status(400).json({ error: "No source notes found for selected inputs." });
-      const summary = await summarizeSourceTexts(texts);
+      const outputLanguage = body.outputLanguage ?? summarizeLanguage ?? undefined;
+      const summary = await summarizeSourceTexts(texts, { outputLanguage });
+      const createdLanguage = outputLanguage?.trim() || "English";
       const created = await repo.createNote({
         userId: req.authUserId!,
         title: body.title,
         directoryPath: body.outputDirectory,
         rawText: summary,
         aiSummary: summary,
-        language: "English",
+        language: createdLanguage,
         durationSeconds: 0,
         sourceType: "generated_summary",
         generatedFromCount: sourceCount,

@@ -76,6 +76,9 @@ export function Viewer() {
             <p className="text-sm text-muted-foreground">
               {note ? new Date(note.lastEditedDate).toLocaleString() : ' '}
               {subtitle ? <span>{` • ${subtitle}`}</span> : null}
+              {note && note.sourceType === 'recording' ? (
+                <span className="block mt-1">Note language: {note.language}</span>
+              ) : null}
             </p>
           </div>
 

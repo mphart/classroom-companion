@@ -27,6 +27,9 @@ import {
 
 const BUFFER_SIZE = 4096;
 
+/** `<select>` value for saving to your library root (same as Home). */
+const SAVE_TO_HOME_VALUE = '__library_home__';
+
 type TranscriptInbound = {
   type: string;
   text?: string;
@@ -475,6 +478,7 @@ export function ActiveRecording() {
     try {
       await createFolder(name, userRoot);
       await reloadCourses();
+      setSaveLocation('course');
       setSelectedCourse(name);
       setShowCourseModal(false);
       setNewCourseName('');
@@ -548,7 +552,7 @@ export function ActiveRecording() {
             </div>
           </div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Set course & language, then capture your notes and live transcript in one place.
+            Choose save location & language, then capture your notes and live transcript in one place.
           </p>
         </motion.div>
 
@@ -569,7 +573,9 @@ export function ActiveRecording() {
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <FolderOpen className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
-            <span className="truncate">{selectedCourse || 'Pick a course folder'}</span>
+            <span className="truncate">
+              {saveLocation === 'home' ? 'Home' : selectedCourse || 'Choose a folder'}
+            </span>
           </div>
         </motion.div>
 
@@ -587,27 +593,44 @@ export function ActiveRecording() {
           </div>
 
           <div>
-            <label className="block text-sm mb-2 text-muted-foreground">Course</label>
+            <label className="block text-sm font-medium text-foreground">Save recording to</label>
+            <p className="mt-0.5 mb-2 text-xs text-muted-foreground leading-snug">
+              Your Home library or a course folder — one place to choose.
+            </p>
             <select
-              value={selectedCourse}
+              value={
+                saveLocation === 'home'
+                  ? SAVE_TO_HOME_VALUE
+                  : selectedCourse || SAVE_TO_HOME_VALUE
+              }
               onChange={(e) => {
-                if (e.target.value === 'create-new') {
+                const v = e.target.value;
+                if (v === 'create-new') {
                   setShowCourseModal(true);
-                } else {
-                  setSelectedCourse(e.target.value);
+                  return;
                 }
+                if (v === SAVE_TO_HOME_VALUE) {
+                  setSaveLocation('home');
+                  return;
+                }
+                setSaveLocation('course');
+                setSelectedCourse(v);
               }}
               disabled={isRecording || loadingCourses}
-              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2.5 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2 text-[15px]"
               style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
             >
-              <option value="">{loadingCourses ? 'Loading folders…' : 'Select a course folder'}</option>
-              {courseFolders.map((folder) => (
-                <option key={folder.id} value={folder.name}>
-                  {folder.name}
-                </option>
-              ))}
-              <option value="create-new">+ Create New Course</option>
+              <optgroup label="Library">
+                <option value={SAVE_TO_HOME_VALUE}>Home</option>
+              </optgroup>
+              <optgroup label={loadingCourses ? 'Folders (loading…)' : 'Course folders'}>
+                {courseFolders.map((folder) => (
+                  <option key={folder.id} value={folder.name}>
+                    {folder.name}
+                  </option>
+                ))}
+              </optgroup>
+              <option value="create-new">+ Create new course folder…</option>
             </select>
           </div>
 
@@ -628,19 +651,6 @@ export function ActiveRecording() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm mb-2 text-muted-foreground">Save Recording Output</label>
-            <select
-              value={saveLocation}
-              onChange={(e) => setSaveLocation(e.target.value as 'home' | 'course')}
-              disabled={isRecording}
-              className="w-full px-3 py-2 border border-border bg-input-background rounded-lg focus:outline-none focus:ring-2"
-              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
-            >
-              <option value="home">Home root directory</option>
-              <option value="course">Inside selected course folder</option>
-            </select>
-          </div>
         </div>
 
         <button

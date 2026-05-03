@@ -167,6 +167,8 @@ export async function generatePracticeExam(body: {
   includeMultipleChoice: boolean;
   includeShortAnswer: boolean;
   otherInstructions?: string;
+  /** Overrides inferred language; otherwise matches lecture recording language when sources agree (e.g. Spanish). */
+  outputLanguage?: string;
 }): Promise<{ note: NoteDto; sourceCount: number }> {
   return apiPost('/ai/practice-exam/generate', body) as Promise<{ note: NoteDto; sourceCount: number }>;
 }

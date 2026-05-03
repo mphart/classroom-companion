@@ -80,6 +80,18 @@ function extractJsonObject(text: string): unknown {
   return JSON.parse(candidate) as unknown;
 }
 
+function examOutputLanguageClause(label: string | undefined): string {
+  const s = label?.trim() ?? "";
+  if (!s || /^english$/i.test(s)) return "";
+  return `\n\nOUTPUT LANGUAGE (mandatory): The instructional source material is in **${s}**. Write the **entire** practice exam JSON in **${s}** — "title", every question "prompt", every multiple-choice "option" and "explanation", and every short_answer "prompt" and "referenceAnswer". Use ${s} only for those strings; do not write exam content in English unless it is a technical term normally left in English in ${s}-language teaching contexts. JSON keys stay as specified by the schema (English identifiers only).`;
+}
+
+function gradingFeedbackLanguageClause(label: string | undefined): string {
+  const s = label?.trim() ?? "";
+  if (!s || /^english$/i.test(s)) return "";
+  return `\n\nFEEDBACK LANGUAGE (mandatory): The exam is written in **${s}**. Write every "feedback" string in **${s}** so help text matches the exam language.`;
+}
+
 function countsForConfig(input: {
   questionCount: number;
   includeMultipleChoice: boolean;
@@ -180,6 +192,8 @@ export async function generatePracticeExamFromSources(input: {
   includeMultipleChoice: boolean;
   includeShortAnswer: boolean;
   otherInstructions?: string;
+  /** Human-readable label (e.g. Spanish) — entire exam content follows this language when not English. */
+  outputLanguage?: string;
 }): Promise<ExamDocument> {
   const { mc, sa } = countsForConfig(input);
   if (mc + sa !== input.questionCount) {
@@ -203,6 +217,7 @@ export async function generatePracticeExamFromSources(input: {
 
   const corpus = filtered.map((t, i) => `### Source ${i + 1}\n${t}`).join("\n\n---\n\n");
   const other = input.otherInstructions?.trim() ? `\nExtra instructions from the student: ${input.otherInstructions.trim()}` : "";
+  const langExtra = examOutputLanguageClause(input.outputLanguage);
 
   const schemaHint = `Return ONLY valid JSON (no markdown) with this exact shape:
 {
@@ -220,6 +235,7 @@ You MUST include exactly ${mc} multiple_choice question(s) and exactly ${sa} sho
 For multiple_choice, correctIndex must be valid for options.length.`;
 
   const prompt = `${INSTRUCTOR_FOCUS}
+${langExtra}
 
 TASK: Write a practice exam for students based on the instructional content below.
 ${schemaHint}
@@ -259,6 +275,8 @@ ${corpus}`;
 export async function gradeShortAnswers(input: {
   exam: ExamDocument;
   responses: { questionIndex: number; answer: string }[];
+  /** Stored exam note language — grading feedback matches when not English. */
+  feedbackLanguage?: string;
 }): Promise<GradeResultItem[]> {
   const useTestFallback = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
   if (useTestFallback) {
@@ -283,9 +301,12 @@ export async function gradeShortAnswers(input: {
     return `Index ${r.questionIndex}:\nQuestion: ${q.prompt}\nReference: ${q.referenceAnswer}\nStudent answer: ${r.answer || "(empty)"}`;
   });
 
+  const feedbackLang = gradingFeedbackLanguageClause(input.feedbackLanguage);
+
   const prompt = `${INSTRUCTOR_FOCUS}
 
 You are grading short-answer responses. For each item, compare the student answer to the reference fairly (synonyms and paraphrases can be correct).
+${feedbackLang}
 
 Return ONLY valid JSON:
 {

@@ -6,6 +6,7 @@ export const SESSION_QA_TRANSCRIPT_WINDOW = 8000;
 
 function getGeminiKey(): string | undefined {
   return (
+    process.env.TA_API_KEY?.trim() ||
     process.env.GEMINI_API_KEY?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     undefined
@@ -59,7 +60,7 @@ export async function answerSessionQuestion(input: {
   if (!apiKey || useTestFallback) {
     if (!useTestFallback) {
       throw new SummarizerError(
-        "AI is not configured. Set GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env.",
+        "AI is not configured. Set TA_API_KEY (or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env.",
         503,
       );
     }

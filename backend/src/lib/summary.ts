@@ -12,8 +12,8 @@ function getGeminiKey(): string | undefined {
 }
 
 function getModelName(): string {
-  // `gemini-flash-latest` tracks Google’s stable Flash cutoff; free-tier quotas differ by model name.
-  return (process.env.GEMINI_MODEL ?? "gemini-flash-latest").trim();
+  // Default `gemini-2.5-flash-lite`: cost-efficient, higher throughput / friendlier rate limits than full Flash.
+  return (process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite").trim();
 }
 
 /** Local stub used only in Vitest / tests (no outbound AI calls). */
@@ -138,7 +138,7 @@ Remove redundancy; keep only instructor-relevant content; drop any stray chatter
       /429|Too Many Requests|quota exceeded|Quota exceeded|free_tier|rate.limit/i.test(raw);
     const hint =
       quotaOrRate
-        ? " For free tier, try GEMINI_MODEL=gemini-flash-latest (or gemini-1.5-flash), wait for the retry window, or enable billing. See https://ai.google.dev/gemini-api/docs/rate-limits"
+        ? " For free tier, try GEMINI_MODEL=gemini-2.5-flash-lite (or gemini-1.5-flash), wait for the retry window, or enable billing. See https://ai.google.dev/gemini-api/docs/rate-limits"
         : "";
     throw new SummarizerError(raw + hint, quotaOrRate ? 429 : 502);
   }

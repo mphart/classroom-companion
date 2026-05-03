@@ -49,7 +49,7 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 | `JWT_EXPIRES_IN` | Optional |
 | `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`); optional alias may be documented in code |
 | `PRACTICE_API_KEY` | Gemini key for practice exam **generate** and **grade** (`/ai/practice-exam/*`); separate from `GEMINI_API_KEY` |
-| `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-flash-latest` |
+| `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-2.5-flash-lite` |
 | `DEEPGRAM_API_KEY` | Live STT (English) on `/transcription/stream` |
 | `GLADIO_API_KEY` | Gladia live translation for non‑English recording languages (alias `GLADIA_API_KEY`) |
 

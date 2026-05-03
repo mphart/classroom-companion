@@ -12,8 +12,9 @@ function getPracticeExamApiKey(): string | undefined {
   return process.env.PRACTICE_API_KEY?.trim() || undefined;
 }
 
+/** Same env as summaries; default Flash-Lite for throughput-friendly quotas. */
 function getModelName(): string {
-  return (process.env.GEMINI_MODEL ?? "gemini-flash-latest").trim();
+  return (process.env.GEMINI_MODEL ?? "gemini-2.5-flash-lite").trim();
 }
 
 export const examMcQuestionSchema = z.object({

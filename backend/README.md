@@ -21,7 +21,7 @@ Default server port is `4000`.
 - `DB_NAME=classroom_companion`
 - **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`. Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
 - **`PRACTICE_API_KEY`**: Required for **`/ai/practice-exam/*`** (generate + grade). Uses the same Gemini SDK; keep this key separate from `GEMINI_API_KEY` if you want different quotas/projects. Also loaded from the repo root `.env` after `backend/.env` (see `app.ts`).
-- **`GEMINI_MODEL`** (optional): Defaults to `gemini-flash-latest` (matches `v1beta/models/gemini-flash-latest`). Override if your project’s quota works better on another model (e.g. `gemini-1.5-flash`).
+- **`GEMINI_MODEL`** (optional): Defaults to **`gemini-2.5-flash-lite`** (Gemini 2.5 Flash-Lite — higher throughput / more generous limits than full Flash for summarization and practice exams). Override if your project prefers another model (e.g. `gemini-flash-latest`, `gemini-1.5-flash`).
 - **Summarization behavior**: `/ai/summarize/*` instructs Gemini to extract **instructor / professor teaching** from mixed speech-to-text (student chatter and off-topic lines are de-emphasized). This is prompt-based, not true diarization—quality improves if the mic favors the instructor.
 - **`DEEPGRAM_API_KEY`**: Required for **`/transcription/stream`** when the client configures language **`en`** (Deepgram realtime STT, including per-word confidence when `words=true`).
 - **`GLADIO_API_KEY`** (or **`GLADIA_API_KEY`**): Required when the lecture language is **not English** — [Gladia](https://gladia.io) live **translation** into that ISO‑639‑1 code (same PCM as Deepgram). English uses Deepgram only.

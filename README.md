@@ -47,7 +47,7 @@ Copy **[`.env.example`](.env.example)** to `.env` and fill in secrets. Compose r
 | `JWT_EXPIRES_IN` | `7d` | Token lifetime |
 | `WEB_PORT` | `8080` | Host port for the web UI |
 | `GEMINI_API_KEY` | _(empty)_ | **Required** for Generate AI Summary / single-note summarize ([Google AI Studio](https://aistudio.google.com/apikey)) |
-| `GEMINI_MODEL` | `gemini-flash-latest` | Override if quotas differ (e.g. `gemini-1.5-flash`) |
+| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Override if quotas differ (e.g. `gemini-flash-latest`, `gemini-1.5-flash`) |
 | `DEEPGRAM_API_KEY` | _(empty)_ | **Required** for **English** live recording STT ([Deepgram](https://deepgram.com)) |
 | `GLADIO_API_KEY` | _(empty)_ | **Required** for **non‑English** recording languages — [Gladia](https://gladia.io) live translation into the selected language (alias: `GLADIA_API_KEY`) |
 

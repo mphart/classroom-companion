@@ -2,7 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronUp, FolderOpen, Languages, MessageCircleQuestion, Mic, Sparkles } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  FolderOpen,
+  Languages,
+  Loader2,
+  MessageCircleQuestion,
+  Mic,
+  Sparkles,
+} from 'lucide-react';
 import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
@@ -39,6 +48,15 @@ const SESSION_QA_CHAR_WINDOW = 8000;
 /** Bars in the live mic spectrum meter (voice band is spread across these bins). */
 const MIC_METER_BARS = 40;
 const MIC_METER_EMIT_MS = 45;
+
+const DEFAULT_DOCUMENT_TITLE = 'Classroom Companion';
+const RECORDING_DOCUMENT_TITLE = '● Recording · Classroom Companion';
+
+const SESSION_QA_SUGGESTED_PROMPTS = [
+  'What was the last main idea I explained?',
+  'Summarize that in one sentence.',
+  'What example did I use to illustrate it?',
+] as const;
 
 type TranscriptInbound = {
   type: string;
@@ -335,6 +353,17 @@ export function ActiveRecording() {
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    if (isRecording) {
+      document.title = RECORDING_DOCUMENT_TITLE;
+    } else {
+      document.title = DEFAULT_DOCUMENT_TITLE;
+    }
+    return () => {
+      document.title = DEFAULT_DOCUMENT_TITLE;
+    };
+  }, [isRecording]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -880,11 +909,9 @@ export function ActiveRecording() {
                 <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
                 <span>Live transcript for this room</span>
               </div>
-              {sttStatus.kind !== 'idle' && sttStatus.kind !== 'live' ? (
-                <p className="mb-2 text-sm text-amber-600 dark:text-amber-500">
-                  {sttStatus.kind === 'connecting' && 'Connecting to transcription…'}
-                  {sttStatus.kind === 'error' &&
-                    `Transcription issue: ${sttStatus.message ?? 'Unknown error'}. You can still finish and save notes.`}
+              {sttStatus.kind === 'error' ? (
+                <p className="mb-2 text-sm text-destructive">
+                  Transcription issue: {sttStatus.message ?? 'Unknown error'}. You can still finish and save notes.
                 </p>
               ) : null}
               {!fullTranscriptPlain ? (
@@ -927,9 +954,36 @@ export function ActiveRecording() {
                 <>
                   <div className="mt-3 max-h-52 overflow-y-auto space-y-2 rounded-lg border border-border/80 bg-muted/20 p-2">
                     {sessionQaMessages.length === 0 ? (
-                      <p className="px-1 py-2 text-xs text-muted-foreground">
-                        Ask anything covered in the audio so far — answers stay grounded in the transcript.
-                      </p>
+                      <div className="space-y-3 px-1 py-2">
+                        <p className="text-xs text-muted-foreground">
+                          Ask anything covered in the audio so far — answers stay grounded in the transcript.
+                        </p>
+                        <div>
+                          <p className="mb-1.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                            Try asking
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {SESSION_QA_SUGGESTED_PROMPTS.map((prompt) => (
+                              <button
+                                key={prompt}
+                                type="button"
+                                className="rounded-full border border-border bg-background/90 px-2.5 py-1 text-left text-[0.7rem] leading-snug text-foreground shadow-sm transition-colors hover:border-[var(--brand)]/50 hover:bg-[var(--brand-soft-bg)] disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={!isRecording || isPaused || sessionQaLoading}
+                                title={
+                                  !isRecording
+                                    ? 'Start recording first'
+                                    : isPaused
+                                      ? 'Resume recording to use suggestions'
+                                      : undefined
+                                }
+                                onClick={() => setSessionQaInput(prompt)}
+                              >
+                                {prompt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       sessionQaMessages.map((m, i) => (
                         <div
@@ -992,8 +1046,65 @@ export function ActiveRecording() {
           </div>
         </div>
 
-        <div className="border-t border-border bg-card/95 p-6 backdrop-blur-sm dark:bg-card/90">
-          <div className="mx-auto flex max-w-4xl items-center justify-center gap-4">
+        <div className="border-t border-border bg-card/95 backdrop-blur-sm dark:bg-card/90">
+          {isRecording ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className={
+                sttStatus.kind === 'error'
+                  ? 'flex items-center gap-2 border-b border-destructive/35 bg-destructive/10 px-4 py-2.5 text-sm text-destructive'
+                  : isPaused
+                    ? 'flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-950 dark:text-amber-100'
+                    : sttStatus.kind === 'connecting'
+                      ? 'flex items-center gap-2 border-b border-amber-500/35 bg-amber-500/[0.12] px-4 py-2.5 text-sm text-amber-900 dark:text-amber-200'
+                      : 'flex items-center gap-2 border-b border-emerald-500/30 bg-emerald-500/[0.1] px-4 py-2.5 text-sm text-emerald-950 dark:text-emerald-100'
+              }
+            >
+              {sttStatus.kind === 'error' ? (
+                <>
+                  <span className="font-semibold">Transcription</span>
+                  <span className="min-w-0">
+                    {sttStatus.message ?? 'Connection issue'} — you can still save notes when you finish.
+                  </span>
+                </>
+              ) : isPaused ? (
+                <>
+                  <span className="relative flex h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+                  <span>
+                    <span className="font-semibold">Paused</span>
+                    <span className="text-muted-foreground"> — microphone and transcription are idle</span>
+                  </span>
+                </>
+              ) : sttStatus.kind === 'connecting' ? (
+                <>
+                  <Loader2 className="size-4 shrink-0 animate-spin text-amber-600 dark:text-amber-400" aria-hidden />
+                  <span>
+                    <span className="font-semibold">Connecting</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      — turning on your mic and linking to the transcription service…
+                    </span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-40" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                  </span>
+                  <span>
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">Live pipeline</span>
+                    <span className="text-muted-foreground">
+                      {' '}
+                      — audio streaming; transcript updates below as you speak
+                    </span>
+                  </span>
+                </>
+              )}
+            </div>
+          ) : null}
+          <div className="mx-auto flex max-w-4xl items-center justify-center gap-4 p-6">
             {!isRecording ? (
               <button
                 type="button"

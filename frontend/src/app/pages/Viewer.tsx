@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { BookOpen, FileText, Mic, Sparkles } from 'lucide-react';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
 import { getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 import { getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
 import '@/styles/brand-ambient.css';
@@ -14,18 +13,37 @@ type ViewerState = {
   noteId?: number;
 } | null;
 
+function parseNoteIdFromSearch(searchParams: URLSearchParams): number | undefined {
+  const raw = searchParams.get('noteId');
+  if (raw == null || raw === '') return undefined;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return n;
+}
+
 export function Viewer() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const reduceMotion = useReducedMotion();
   const sessionUser = getSessionUser();
   const viewerState = (location.state as ViewerState) ?? null;
 
-  const noteId = viewerState?.noteId;
+  const stateId = viewerState?.noteId;
+  const fromQuery = parseNoteIdFromSearch(searchParams);
+  const noteId =
+    typeof stateId === 'number' && Number.isInteger(stateId) && stateId > 0 ? stateId : fromQuery;
   const [note, setNote] = useState<NoteDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (noteId === undefined) return;
+    if (!searchParams.get('noteId')) {
+      navigate(`/viewer?noteId=${noteId}`, { replace: true, state: { noteId } });
+    }
+  }, [noteId, navigate, searchParams]);
 
   useEffect(() => {
     if (noteId === undefined) return;
@@ -48,7 +66,9 @@ export function Viewer() {
   }, [noteId]);
 
   const handleGeminiSummarize = async () => {
-    if (noteId === undefined || !note?.rawText.trim()) return;
+    if (noteId === undefined) return;
+    const body = note?.rawText?.trim() ?? '';
+    if (!body) return;
     setSummarizing(true);
     setError('');
     try {
@@ -166,7 +186,12 @@ export function Viewer() {
             {note?.sourceType === 'recording' ? (
               <button
                 type="button"
-                disabled={summarizing || loading || !note.rawText.trim()}
+                disabled={summarizing || loading || !note.rawText?.trim()}
+                title={
+                  !note?.rawText?.trim()
+                    ? 'Add transcript text to this note before summarizing.'
+                    : 'Generate an AI summary with Gemini'
+                }
                 onClick={() => void handleGeminiSummarize()}
                 className="rounded-lg px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand)' }}
@@ -181,7 +206,6 @@ export function Viewer() {
             ) : null}
           </div>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             <img src={logo} alt="ClassroomCompanion" className="h-10 w-auto" />
           </div>
         </div>

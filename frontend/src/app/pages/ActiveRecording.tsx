@@ -16,7 +16,6 @@ import {
   type TranscriptRichPiece,
   type TranscriptToken,
 } from '@/app/components/TranscriptConfidenceText';
-import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 const BUFFER_SIZE = 4096;
 
@@ -644,7 +643,6 @@ export function ActiveRecording() {
               <h2 className="text-xl font-semibold tracking-tight">Jot while you listen, {firstName}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">Quick bullets — your transcript builds below.</p>
             </div>
-            <ThemeToggle />
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {notes.map((note, index) => (

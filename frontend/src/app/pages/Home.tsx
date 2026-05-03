@@ -275,7 +275,7 @@ export function Home() {
       return;
     }
 
-    navigate('/viewer', { state: { noteId: item.id } });
+    navigate({ pathname: '/viewer', search: `?noteId=${String(item.id)}` }, { state: { noteId: item.id } });
   };
 
   const goUpOneLevel = () => {
@@ -398,7 +398,10 @@ export function Home() {
       setCurrentDirectory(userRoot);
       setSelectedItems(new Set());
       setSelectionMode(false);
-      navigate('/viewer', { state: { noteId: result.note.id } });
+      navigate(
+        { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
+        { state: { noteId: result.note.id } },
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary');
     } finally {

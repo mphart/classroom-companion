@@ -144,7 +144,7 @@ Without **`GEMINI_API_KEY`**, summary endpoints return a configuration error. Wi
 
 - Mason Hart (`mphart`)
 - Tyler Mestery (`tmestery`)
-- Robin Lin
+- Robin Lin (`Roobinisdabomb`)
 
 ## License
 

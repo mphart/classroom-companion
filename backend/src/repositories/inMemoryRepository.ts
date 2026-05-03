@@ -1,4 +1,5 @@
 import { HttpClientError } from "../lib/errors";
+import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { isDirectoryUnderUserRoot, isFolderCreationBlockedInDirectory } from "../lib/itemPathDepth";
 import { validateMoveItemContext } from "../lib/validateItemMove";
 import type { CreateNoteInput, Item, Note, User } from "../types";
@@ -228,17 +229,21 @@ export class InMemoryRepository implements Repository {
 
     folderNoteIds.forEach((id) => selectedNoteIds.add(id));
 
-    const pairs: { text: string; lang: string }[] = [];
+    const pairs: { text: string; lang: string; sourceType: Note["sourceType"] }[] = [];
     for (const id of selectedNoteIds) {
       const n = this.notes.find((x) => x.itemId === id);
       const raw = n?.rawText?.trim();
       if (!n || !raw) continue;
-      pairs.push({ text: n.rawText, lang: (n.language || "English").trim() });
+      pairs.push({
+        text: n.rawText,
+        lang: (n.language || "English").trim(),
+        sourceType: n.sourceType,
+      });
     }
     const texts = pairs.map((p) => p.text);
-    const langs = pairs.map((p) => p.lang);
-    const unique = new Set(langs);
-    const summarizeLanguage = langs.length > 0 && unique.size === 1 ? [...unique][0]! : null;
+    const summarizeLanguage = inferSelectionSummaryLanguage(
+      pairs.map((p) => ({ language: p.lang, sourceType: p.sourceType })),
+    );
 
     return { texts, sourceCount: texts.length, summarizeLanguage };
   }

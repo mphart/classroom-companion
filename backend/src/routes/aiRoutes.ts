@@ -5,6 +5,7 @@ import {
   gradeShortAnswers,
   parseExamDocument,
 } from "../lib/practiceExam";
+import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { summarizeSourceTexts } from "../lib/summary";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
 import type { Repository } from "../repositories/repository";
@@ -52,7 +53,12 @@ export const createAiRoutes = (repo: Repository): Router => {
       const noteId = z.coerce.number().int().positive().parse(req.params.noteId);
       const found = await repo.getNoteById({ userId: req.authUserId!, itemId: noteId });
       if (!found) return res.status(404).json({ error: "Note not found." });
-      const summary = await summarizeSourceTexts([found.note.rawText], { outputLanguage: found.note.language });
+      const inferred = inferSelectionSummaryLanguage([
+        { language: found.note.language, sourceType: found.note.sourceType },
+      ]);
+      const summary = await summarizeSourceTexts([found.note.rawText], {
+        outputLanguage: inferred ?? undefined,
+      });
       const updated = await repo.updateNoteSummary({ userId: req.authUserId!, itemId: noteId, summary });
       return res.json({ note: mapNoteResponse(updated) });
     } catch (error) {

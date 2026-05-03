@@ -121,6 +121,11 @@ export async function renameItem(itemId: number, newName: string): Promise<Liste
   return payload.item;
 }
 
+export async function moveItem(itemId: number, targetDirectory: string): Promise<ListedItemDto> {
+  const payload = (await apiPatch(`/items/${itemId}/move`, { targetDirectory })) as { item: ListedItemDto };
+  return payload.item;
+}
+
 export async function createNote(body: {
   title: string;
   directory: string;

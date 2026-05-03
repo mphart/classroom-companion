@@ -1,11 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
-import { SummarizerError } from "../lib/errors";
+import { HttpClientError, SummarizerError } from "../lib/errors";
 
 export const notFoundHandler = (_req: Request, res: Response) => {
   res.status(404).json({ error: "Route not found." });
 };
 
 export const errorHandler = (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof HttpClientError) {
+    return res.status(error.statusCode).json({ error: error.message });
+  }
   if (error instanceof SummarizerError) {
     return res.status(error.statusCode).json({ error: error.message });
   }

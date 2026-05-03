@@ -633,14 +633,6 @@ export function Home() {
           </div>
         </div>
 
-        <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Generate AI Summary:</span> Uses Google Gemini on your backend
-          (<code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_API_KEY</code> in <code className="text-xs bg-muted px-1 py-0.5 rounded">backend/.env</code> or Compose;
-          optional <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_MODEL</code>, default{' '}
-          <code className="text-xs bg-muted px-1 py-0.5 rounded">gemini-flash-latest</code>). Turn on Select mode, pick notes
-          and/or folders (folders include all notes inside), then click Generate.
-        </div>
-
         {selectionMode && selectedItems.size > 0 && (
           <div className="mb-6 flex items-center gap-3">
             <button

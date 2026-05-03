@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import logo from '@/imports/classroomcompanion_logo_v4.svg';
+import cornerLogo from '@/assets/corner-logo.svg';
 import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
 import { floatToPCM16 } from '@/app/lib/audioPcm16k';
 import { getSessionUser, getToken } from '@/app/lib/authSession';
@@ -470,8 +470,24 @@ export function ActiveRecording() {
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       <div className="w-80 bg-card border-r border-border p-6 flex flex-col">
-        <button onClick={() => navigate('/home')} className="mb-8">
-          <img src={logo} alt="ClassroomCompanion" className="h-16 w-full object-contain" />
+        <button
+          type="button"
+          onClick={() => navigate('/home')}
+          aria-label="Classroom Companion — go to home"
+          className="group mb-8 flex w-full items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-left shadow-sm transition-colors hover:bg-muted/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+        >
+          <img
+            src={cornerLogo}
+            alt=""
+            width={44}
+            height={44}
+            draggable={false}
+            className="pointer-events-none h-11 w-11 shrink-0 select-none rounded-lg shadow-sm ring-1 ring-border/70"
+          />
+          <div className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-semibold tracking-tight text-foreground">Classroom Companion</span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">Home</span>
+          </div>
         </button>
 
         <div className="flex-1 space-y-6">
@@ -527,12 +543,6 @@ export function ActiveRecording() {
               <option>German</option>
               <option>Mandarin</option>
             </select>
-            {language !== 'English' ? (
-              <p className="mt-1.5 text-xs text-muted-foreground leading-snug">
-                Speech is translated into {language} on the server (Gladia). The API needs{' '}
-                <span className="font-mono text-[11px]">GLADIO_API_KEY</span> configured. English uses Deepgram only.
-              </p>
-            ) : null}
           </div>
 
           <div>

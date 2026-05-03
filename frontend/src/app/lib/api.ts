@@ -240,6 +240,20 @@ export async function extractJargon(body: {
   return apiPost('/ai/jargon/extract', body) as Promise<{ terms: { term: string; definition: string }[] }>;
 }
 
+/** Live slide sync — picks the slide best matching the recent transcript (`GEMINI_API_KEY`). */
+export async function matchCurrentSlide(body: {
+  slideNoteId: number;
+  recentTranscript: string;
+  currentSlide?: number;
+}): Promise<{ slideNumber: number; confidence: number; reason?: string; deckSize: number }> {
+  return apiPost('/ai/slide-match', body) as Promise<{
+    slideNumber: number;
+    confidence: number;
+    reason?: string;
+    deckSize: number;
+  }>;
+}
+
 export async function generatePracticeExam(body: {
   noteIds: number[];
   folderIds: number[];

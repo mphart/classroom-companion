@@ -33,6 +33,7 @@ Web app for recording lectures, organizing courses and notes, **live speech-to-t
 ### API keys (see below)
 
 - **`GEMINI_API_KEY`** — AI summaries and single-note summarize.
+- **`SLIDESHOW_API_KEY`** — **Live slide sync** on the recording page (`POST /ai/slide-match`). Uses Gemini with its **own** quota when set; if unset, slide sync falls back to **`GEMINI_API_KEY`**.
 - **`PRACTICE_API_KEY`** — Practice exam **generation** and **short-answer grading** (same Gemini SDK; separate key optional for quotas/billing).
 
 ## Roadmap / in progress
@@ -76,6 +77,7 @@ Copy **[`.env.example`](.env.example)** to `.env` and fill in secrets. Compose r
 | `JWT_EXPIRES_IN` | `7d` | Token lifetime |
 | `WEB_PORT` | `8080` | Host port for the web UI |
 | `GEMINI_API_KEY` | _(empty)_ | **Required** for Generate AI Summary / single-note summarize ([Google AI Studio](https://aistudio.google.com/apikey)) |
+| `SLIDESHOW_API_KEY` | _(empty)_ | **Optional** — live **slide sync** while recording; uses this key instead of `GEMINI_API_KEY` so slideshow calls do not share the same quota |
 | `PRACTICE_API_KEY` | _(empty)_ | **Required** for **practice exam** generate + short-answer grade (can match `GEMINI_API_KEY` or use a separate project key) |
 | `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Override if quotas differ (e.g. `gemini-flash-latest`, `gemini-1.5-flash`) |
 | `DEEPGRAM_API_KEY` | _(empty)_ | **Required** for **English** live recording STT ([Deepgram](https://deepgram.com)) |
@@ -85,7 +87,8 @@ Example:
 
 ```bash
 cp .env.example .env
-# Edit .env: set JWT_SECRET, GEMINI_API_KEY, PRACTICE_API_KEY (if using practice exams),
+# Edit .env: set JWT_SECRET, GEMINI_API_KEY, SLIDESHOW_API_KEY (optional, for slide sync quota),
+# PRACTICE_API_KEY (if using practice exams),
 # DEEPGRAM_API_KEY (English STT), GLADIO_API_KEY (other languages)
 docker compose up --build
 ```
@@ -111,7 +114,7 @@ npm run dev
 
 API: **http://localhost:4000**
 
-Set at least `JWT_SECRET`, MySQL `DB_*` vars, **`GEMINI_API_KEY`** for summarization, and **`PRACTICE_API_KEY`** for practice exams. For **`/transcription/stream`**, set **`DEEPGRAM_API_KEY`** when using **English** and **`GLADIO_API_KEY`** when using other lecture languages (Gladia).
+Set at least `JWT_SECRET`, MySQL `DB_*` vars, **`GEMINI_API_KEY`** for summarization, optional **`SLIDESHOW_API_KEY`** for live slide sync (otherwise slide sync uses `GEMINI_API_KEY`), and **`PRACTICE_API_KEY`** for practice exams. For **`/transcription/stream`**, set **`DEEPGRAM_API_KEY`** when using **English** and **`GLADIO_API_KEY`** when using other lecture languages (Gladia).
 
 ### Frontend
 
@@ -138,7 +141,7 @@ cd backend && npm run build && npm run test
 2. **Single-note summary:** Open a lecture note → **Generate AI summary**.
 3. **Practice exam:** Home → **Select** → **Generate practice exam** (configure question types and count in the dialog) → complete the exam → **Check answers**.
 
-Without **`GEMINI_API_KEY`**, summary endpoints return a configuration error. Without **`PRACTICE_API_KEY`**, practice exam generate/grade returns a configuration error.
+Without **`GEMINI_API_KEY`**, summary endpoints return a configuration error. Without **`PRACTICE_API_KEY`**, practice exam generate/grade returns a configuration error. Live **slide sync** needs **`SLIDESHOW_API_KEY`** or **`GEMINI_API_KEY`** (slideshow prefers the dedicated key when both are set).
 
 ## Authors
 

@@ -15,6 +15,7 @@ Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pag
 | Database | MySQL (see `backend/src/db/schema.sql`) |
 | Auth | JWT (`Authorization: Bearer …`) |
 | Summaries + flashcards | Google Gemini (`@google/generative-ai`) — `/ai/summarize/*`, **`/ai/flashcards/generate`** (`GEMINI_API_KEY`) |
+| Live slide sync (recording) | Gemini — **`POST /ai/slide-match`** — prefers **`SLIDESHOW_API_KEY`**, else **`GEMINI_API_KEY`** |
 | Practice exams | Gemini via **`PRACTICE_API_KEY`** — `/ai/practice-exam/*` (generate + grade) |
 | Live STT | Deepgram streaming — browser → backend WebSocket → Deepgram |
 | Slide PDFs | Upload + disk storage; **pdfjs-dist** extracts per-page text server-side; viewer loads PDF via authenticated blob URL |
@@ -56,6 +57,7 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 | `JWT_SECRET` | JWT signing (override default in production) |
 | `JWT_EXPIRES_IN` | Optional |
 | `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`) and **flashcard generation** (`/ai/flashcards/generate`); optional alias may be documented in code |
+| `SLIDESHOW_API_KEY` | Optional — **`POST /ai/slide-match`** (live slide sync); when set, uses this key instead of `GEMINI_API_KEY` for quota isolation |
 | `PRACTICE_API_KEY` | Gemini key for practice exam **generate** and **grade** (`/ai/practice-exam/*`); separate from `GEMINI_API_KEY` |
 | `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-2.5-flash-lite` |
 | `DEEPGRAM_API_KEY` | Live STT (English) on `/transcription/stream` |
@@ -66,7 +68,7 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 
 ### Local backend (`backend/.env`)
 
-Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GLADIO_API_KEY` (Gladia), `GEMINI_*`, and **`PRACTICE_API_KEY`** for practice exams (or rely on repo root `.env`, which is loaded after `backend/.env` for missing keys). Optional **`PDF_UPLOAD_DIR`** overrides the default `uploads/pdfs` directory under the process cwd for slide PDF storage.
+Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GLADIO_API_KEY` (Gladia), `GEMINI_*`, optional **`SLIDESHOW_API_KEY`** for slide sync, and **`PRACTICE_API_KEY`** for practice exams (or rely on repo root `.env`, which is loaded after `backend/.env` for missing keys). Optional **`PDF_UPLOAD_DIR`** overrides the default `uploads/pdfs` directory under the process cwd for slide PDF storage.
 
 ### Frontend build-time (`VITE_*`)
 
@@ -97,6 +99,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 - **Page:** `frontend/src/app/pages/ActiveRecording.tsx` — mic → PCM (see `frontend/src/app/lib/audioPcm16k.ts`) → WebSocket.
 - **Live glossary (jargon co-pilot):** `extractJargon` in `frontend/src/app/lib/api.ts` → **`POST /ai/jargon/extract`** — while recording, new transcript deltas (≥25 words, ~12s client gate) return domain terms + definitions; chips animate in the **Live glossary** panel (ephemeral; reset when starting a new recording). Uses **`GEMINI_API_KEY`**; server cooldown 8s per user.
+- **Live slide sync:** `matchCurrentSlide` → **`POST /ai/slide-match`** — attaches a **`slide_pdf`** deck on the recording page; server picks the best slide from recent transcript text. Uses **`SLIDESHOW_API_KEY`** when set, otherwise **`GEMINI_API_KEY`**; server cooldown ~8s per user (client also gates).
 - **URL helper:** `frontend/src/app/lib/transcriptionWs.ts` — `getTranscriptionStreamUrl`, `buildConfigureMessage`.
 - **Language labels:** mapped to Deepgram codes in `frontend/src/app/lib/transcriptionLanguage.ts`.
 
@@ -150,6 +153,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 | Nginx won’t start | Invalid directive — check for `/*` comments; use `#` only. |
 | Summaries fail in Docker | Set `GEMINI_API_KEY` in env Compose passes to **`api`**. |
 | Flashcard generation **503** | Same as summaries — needs **`GEMINI_API_KEY`** on **`api`**. |
+| Slide sync **503** on recording | Set **`SLIDESHOW_API_KEY`** or **`GEMINI_API_KEY`** on **`api`** (Compose passes from root `.env`). |
 | Flashcards fail with DB enum error | Run migration **`003_flashcards.sql`** or restart API so **`ensureNotesSchema()`** adds **`generated_flashcards`** to `notes.source_type`. |
 | Slide PDF **404** or missing after deploy | Ensure **`PDF_UPLOAD_DIR`** matches the mounted volume path (`/data/uploads/pdfs` in Compose) and the **`pdf_uploads`** volume is present; local dev uses `**/uploads/pdfs/` under cwd (gitignored). |
 

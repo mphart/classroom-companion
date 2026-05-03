@@ -70,6 +70,7 @@ Uses **`GEMINI_API_KEY`** (same as summaries). Client sends the **recent transcr
   - Response `503`: Gemini not configured.
 
 - `POST /ai/jargon/extract` — live **domain jargon** from a transcript **chunk** (for the recording-page glossary co-pilot). Uses **`GEMINI_API_KEY`** and **`GEMINI_MODEL`**.
+- `POST /ai/slide-match` — live **slide sync**: picks which slide matches the recent transcript for an attached **`slide_pdf`** note. Uses **`SLIDESHOW_API_KEY`** when set, otherwise **`GEMINI_API_KEY`** (or **`GOOGLE_GENERATIVE_AI_API_KEY`**). Same **`GEMINI_MODEL`**. Per-user cooldown (~8s).
   - Request: `{ "chunkText": "<plain text, 1–4000 chars>", "alreadyFlagged"?: ["derivative", "…"], "language"?: "Spanish" }` — optional **`language`** forces definition text into that language (same convention as Session Q&A when the lecture is not in English).
   - Response `200`: `{ "terms": [ { "term": "…", "definition": "…" } ] }` — may be an empty array.
   - Response `400`: validation failed (e.g. empty `chunkText` after trim).

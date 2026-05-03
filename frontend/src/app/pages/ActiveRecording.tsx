@@ -35,6 +35,10 @@ const SAVE_TO_HOME_VALUE = '__library_home__';
 /** Must match backend `SESSION_QA_TRANSCRIPT_WINDOW` for context sent to Session Q&A. */
 const SESSION_QA_CHAR_WINDOW = 8000;
 
+/** Bars in the live mic spectrum meter (voice band is spread across these bins). */
+const MIC_METER_BARS = 40;
+const MIC_METER_EMIT_MS = 45;
+
 type TranscriptInbound = {
   type: string;
   text?: string;
@@ -102,6 +106,7 @@ export function ActiveRecording() {
   const [sessionQaInput, setSessionQaInput] = useState('');
   const [sessionQaLoading, setSessionQaLoading] = useState(false);
   const [sessionQaMessages, setSessionQaMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+  const [micSpectrum, setMicSpectrum] = useState<number[]>(() => Array.from({ length: MIC_METER_BARS }, () => 0));
 
   const transcriptionWsRef = useRef<WebSocket | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -109,6 +114,9 @@ export function ActiveRecording() {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const mediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const muteGainRef = useRef<GainNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const micMeterRafRef = useRef(0);
+  const micMeterLastEmitRef = useRef(0);
 
   const isPausedRef = useRef(false);
   const transcriptCommittedPiecesRef = useRef<TranscriptRichPiece[]>([]);
@@ -124,17 +132,64 @@ export function ActiveRecording() {
     return () => clearInterval(interval);
   }, [isRecording, isPaused]);
 
+  const stopMicMeterLoop = useCallback(() => {
+    cancelAnimationFrame(micMeterRafRef.current);
+    micMeterRafRef.current = 0;
+    micMeterLastEmitRef.current = 0;
+    setMicSpectrum(Array.from({ length: MIC_METER_BARS }, () => 0));
+  }, []);
+
   const teardownAudioGraph = useCallback(() => {
+    stopMicMeterLoop();
     try {
+      analyserRef.current?.disconnect();
       scriptProcessorRef.current?.disconnect();
       mediaSourceRef.current?.disconnect();
       muteGainRef.current?.disconnect();
     } catch {
       /* noop */
     }
+    analyserRef.current = null;
     scriptProcessorRef.current = null;
     mediaSourceRef.current = null;
     muteGainRef.current = null;
+  }, [stopMicMeterLoop]);
+
+  const startMicMeterLoop = useCallback(() => {
+    cancelAnimationFrame(micMeterRafRef.current);
+    const zeros = () => Array.from({ length: MIC_METER_BARS }, () => 0);
+    const tick = (now: number) => {
+      micMeterRafRef.current = requestAnimationFrame(tick);
+      const an = analyserRef.current;
+      if (!an) return;
+
+      if (isPausedRef.current) {
+        if (now - micMeterLastEmitRef.current > 120) {
+          micMeterLastEmitRef.current = now;
+          setMicSpectrum(zeros());
+        }
+        return;
+      }
+
+      const buf = new Uint8Array(an.frequencyBinCount);
+      an.getByteFrequencyData(buf);
+      const bins = Math.max(1, Math.floor(buf.length * 0.88));
+      const chunk = bins / MIC_METER_BARS;
+      const bars: number[] = [];
+      for (let i = 0; i < MIC_METER_BARS; i++) {
+        let m = 0;
+        const start = Math.floor(i * chunk);
+        const end = Math.min(bins, Math.floor((i + 1) * chunk));
+        for (let j = start; j < end; j++) m = Math.max(m, buf[j] ?? 0);
+        bars.push(m / 255);
+      }
+
+      if (now - micMeterLastEmitRef.current >= MIC_METER_EMIT_MS) {
+        micMeterLastEmitRef.current = now;
+        setMicSpectrum(bars);
+      }
+    };
+    micMeterRafRef.current = requestAnimationFrame(tick);
   }, []);
 
   const stopMediaTracks = () => {
@@ -183,6 +238,14 @@ export function ActiveRecording() {
     transcriptPartialPieceRef.current = transcriptPartialPiece;
   }, [transcriptPartialPiece]);
 
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(micMeterRafRef.current);
+      micMeterRafRef.current = 0;
+    },
+    [],
+  );
+
   const attachScriptProcessorPipeline = useCallback((ws: WebSocket, audioContext: AudioContext) => {
     const stream = mediaStreamRef.current;
     if (!stream) return;
@@ -210,10 +273,20 @@ export function ActiveRecording() {
       }
     };
 
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.82;
+    analyser.minDecibels = -85;
+    analyser.maxDecibels = -25;
+    analyserRef.current = analyser;
+    source.connect(analyser);
+
     source.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
-  }, [teardownAudioGraph]);
+
+    startMicMeterLoop();
+  }, [teardownAudioGraph, startMicMeterLoop]);
 
   const buildAudioGraphAndStreamPCM = useCallback(
     async (ws: WebSocket) => {
@@ -734,6 +807,69 @@ export function ActiveRecording() {
             ))}
           </div>
         </div>
+
+        {isRecording ? (
+          <div className="relative z-20 shrink-0 border-b border-[var(--brand-soft-border)] bg-gradient-to-b from-[var(--brand-soft-bg)]/60 via-card/98 to-card/95 px-4 py-3 backdrop-blur-md dark:from-[var(--brand-soft-bg)]/30">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md ring-2 ring-[var(--brand)]/30"
+                    style={{
+                      background:
+                        'linear-gradient(145deg, var(--brand-soft-bg), color-mix(in srgb, var(--brand) 18%, transparent))',
+                    }}
+                  >
+                    <Mic className="size-[1.15rem] text-[var(--brand-deep)] dark:text-[var(--brand)]" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Live input
+                    </p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {isPaused ? 'Paused — meter idle' : 'Speech energy'}
+                    </p>
+                  </div>
+                </div>
+                {!isPaused ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[0.65rem] font-medium text-emerald-800 dark:text-emerald-400">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                    Listening
+                  </span>
+                ) : (
+                  <span className="text-[0.65rem] font-medium text-muted-foreground">Resume for live levels</span>
+                )}
+              </div>
+              <div
+                className="flex h-[3.25rem] items-end justify-center gap-px rounded-xl border border-border/70 bg-gradient-to-b from-background/90 to-muted/40 px-2 py-2 shadow-inner sm:h-16 sm:gap-0.5"
+                role="img"
+                aria-label={isPaused ? 'Microphone level idle while paused' : 'Microphone level spectrum'}
+              >
+                {micSpectrum.map((v, i) => (
+                  <div
+                    key={i}
+                    className="min-h-[4px] min-w-0 flex-1 rounded-full transition-[height,opacity] duration-75 ease-out"
+                    style={{
+                      height: `${Math.max(12, 12 + v * 88)}%`,
+                      background:
+                        v > 0.55
+                          ? 'linear-gradient(to top, rgb(22 163 74), var(--brand), color-mix(in srgb, var(--brand-hover) 85%, white))'
+                          : 'linear-gradient(to top, var(--brand-deep), var(--brand))',
+                      opacity: isPaused ? 0.22 : 0.28 + v * 0.72,
+                      boxShadow:
+                        !isPaused && v > 0.45
+                          ? '0 0 10px color-mix(in srgb, var(--brand) 45%, transparent)'
+                          : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-4xl space-y-4">

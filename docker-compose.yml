@@ -42,6 +42,9 @@ services:
       DB_NAME: classroom_companion
       JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      AI_SUMMARIZER: ${AI_SUMMARIZER:-}
+      FLASHCARD_GENERATOR: ${FLASHCARD_GENERATOR:-}
+      VIDEO: ${VIDEO:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ASSEMBLYAI_API_KEY: ${ASSEMBLYAI_API_KEY:-}
       SLIDESHOW_API_KEY: ${SLIDESHOW_API_KEY:-}

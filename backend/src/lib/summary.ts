@@ -14,8 +14,10 @@ export function isGeminiSummarizeRateLimited(error: unknown): boolean {
   return GEMINI_RATE_OR_QUOTA_RE.test(msg);
 }
 
-function getGeminiKey(): string | undefined {
+function getGeminiKey(override?: string): string | undefined {
   return (
+    override?.trim() ||
+    process.env.AI_SUMMARIZER?.trim() ||
     process.env.GEMINI_API_KEY?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     undefined
@@ -52,6 +54,8 @@ RULES FOR WHAT TO INCLUDE IN THE SUMMARY:
 export type SummarizeOptions = {
   /** Human-readable label (e.g. note `language` / UI dropdown) to steer Gemini output language. */
   outputLanguage?: string;
+  /** Optional endpoint-specific API key (e.g., VIDEO for YouTube parse). */
+  apiKey?: string;
 };
 
 function outputLanguageClause(label: string | undefined): string {
@@ -82,12 +86,12 @@ export async function summarizeSourceTexts(texts: string[], options?: SummarizeO
   }
 
   const useTestFallback = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
-  const apiKey = getGeminiKey();
+  const apiKey = getGeminiKey(options?.apiKey);
 
   if (!apiKey || useTestFallback) {
     if (!useTestFallback) {
       throw new SummarizerError(
-        "AI is not configured. Set GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env with your Gemini API key.",
+        "AI is not configured. Set AI_SUMMARIZER (or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env with your Gemini API key.",
         503,
       );
     }

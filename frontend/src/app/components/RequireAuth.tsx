@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from 'react-router';
+import { ThemeToggle } from '@/app/components/ThemeToggle';
 import { getToken } from '@/app/lib/authSession';
 
 export function RequireAuthLayout() {
@@ -6,5 +7,10 @@ export function RequireAuthLayout() {
     return <Navigate to="/" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <ThemeToggle />
+    </>
+  );
 }

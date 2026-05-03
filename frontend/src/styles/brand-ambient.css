@@ -1,0 +1,65 @@
+/**
+ * Drifting blobs for Home / auth backgrounds. Logo stays static in TSX.
+ * Respects prefers-reduced-motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes brand-ambient-drift-a {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    22% {
+      transform: translate3d(22%, 14%, 0) scale(1.14);
+    }
+    48% {
+      transform: translate3d(-14%, 22%, 0) scale(0.86);
+    }
+    72% {
+      transform: translate3d(12%, -10%, 0) scale(1.08);
+    }
+  }
+
+  @keyframes brand-ambient-drift-b {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    }
+    33% {
+      transform: translate3d(-20%, -14%, 0) scale(1.12) rotate(-4deg);
+    }
+    66% {
+      transform: translate3d(16%, 10%, 0) scale(0.9) rotate(3deg);
+    }
+  }
+
+  @keyframes brand-ambient-drift-c {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
+    }
+    30% {
+      transform: translate3d(14%, -18%, 0) scale(1.1) rotate(8deg);
+    }
+    60% {
+      transform: translate3d(-12%, 12%, 0) scale(0.88) rotate(-7deg);
+    }
+    85% {
+      transform: translate3d(10%, 8%, 0) scale(1.05) rotate(4deg);
+    }
+  }
+
+  .brand-ambient-blob-a {
+    animation: brand-ambient-drift-a 11s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .brand-ambient-blob-b {
+    animation: brand-ambient-drift-b 14s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .brand-ambient-blob-c {
+    animation: brand-ambient-drift-c 9s ease-in-out infinite;
+    will-change: transform;
+  }
+}

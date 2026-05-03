@@ -189,6 +189,7 @@ export class InMemoryRepository implements Repository {
       sourceType: input.sourceType ?? "recording",
       generatedFromCount: input.generatedFromCount ?? null,
       pdfFilePath: input.pdfFilePath ?? null,
+      youtubeSourceUrl: input.youtubeSourceUrl ?? null,
       createdAt: now,
       updatedAt: now,
     };

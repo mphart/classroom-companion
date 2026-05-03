@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "assemblyai": "^4.32.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

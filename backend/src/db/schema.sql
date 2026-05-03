@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS notes (
   source_type ENUM('recording', 'generated_summary', 'generated_practice_exam', 'slide_pdf', 'generated_flashcards') NOT NULL DEFAULT 'recording',
   generated_from_count INT UNSIGNED NULL,
   pdf_file_path VARCHAR(600) NULL DEFAULT NULL,
+  youtube_source_url VARCHAR(500) NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_notes_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE

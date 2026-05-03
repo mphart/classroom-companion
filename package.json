@@ -1,0 +1,13 @@
+{
+  "name": "classroom-companion",
+  "private": true,
+  "description": "Use npm run ci from this folder, or npm ci inside frontend/ or backend/",
+  "scripts": {
+    "ci": "npm ci --prefix backend && npm run ci:fresh --prefix frontend",
+    "ci:repair": "npm ci --prefix backend && npm run ci:repair --prefix frontend",
+    "ci:frontend": "npm ci --prefix frontend",
+    "ci:backend": "npm ci --prefix backend",
+    "ci:frontend:fresh": "npm run ci:fresh --prefix frontend",
+    "ci:frontend:repair": "npm run ci:repair --prefix frontend"
+  }
+}

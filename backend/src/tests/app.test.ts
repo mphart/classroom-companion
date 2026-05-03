@@ -1,5 +1,12 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HttpClientError } from "../lib/errors";
+import { parseYoutubePipeline } from "../lib/youtubeAudioParse";
+
+vi.mock("../lib/youtubeAudioParse", () => ({
+  parseYoutubePipeline: vi.fn(),
+}));
+
 import { createApp } from "../app";
 import { InMemoryRepository } from "../repositories/inMemoryRepository";
 import { resetAiCooldownMapsForTest } from "../routes/aiRoutes";
@@ -545,5 +552,77 @@ describe("MVP backend routes", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ targetDirectory: "1/A/B/" });
     expect(move.status).toBe(400);
+  });
+
+  describe("POST /youtube/parse", () => {
+    beforeEach(() => {
+      vi.mocked(parseYoutubePipeline).mockResolvedValue({
+        transcriptText: "Hello world from transcript.",
+        summaryMarkdown: "## Summary\n\n- Point one",
+        durationSeconds: 99,
+        noteTitle: "Mock Parsed Title",
+        youtubeSourceUrl: "https://www.youtube.com/watch?v=abcd1234567",
+      });
+    });
+
+    it("creates a summarized recording note with youtubeSourceUrl", async () => {
+      const { app, token } = await bootstrap();
+      const res = await request(app)
+        .post("/youtube/parse")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          directory: "1/",
+          language: "English",
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.note.title).toBe("Mock Parsed Title");
+      expect(res.body.note.aiSummary).toContain("Point one");
+      expect(res.body.note.durationSeconds).toBe(99);
+      expect(res.body.note.youtubeSourceUrl).toBe("https://www.youtube.com/watch?v=abcd1234567");
+      expect(res.body.note.sourceType).toBe("recording");
+      expect(res.body.note.rawText).toContain("Transcript:");
+      expect(res.body.note.rawText).toContain("Hello world from transcript.");
+    });
+
+    it("rejects invalid YouTube URLs", async () => {
+      const { app, token } = await bootstrap();
+      const res = await request(app)
+        .post("/youtube/parse")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          youtubeUrl: "https://example.com/video",
+          directory: "1/",
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects directories outside the user tree", async () => {
+      const { app, token } = await bootstrap();
+      const res = await request(app)
+        .post("/youtube/parse")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          directory: "2/",
+        });
+      expect(res.status).toBe(400);
+    });
+
+    it("maps pipeline failures to HTTP errors", async () => {
+      vi.mocked(parseYoutubePipeline).mockRejectedValueOnce(
+        new HttpClientError("Could not access the video. Make sure the link is public and try again.", 502),
+      );
+      const { app, token } = await bootstrap();
+      const res = await request(app)
+        .post("/youtube/parse")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+          directory: "1/",
+        });
+      expect(res.status).toBe(502);
+      expect(res.body.error).toContain("Could not access");
+    });
   });
 });

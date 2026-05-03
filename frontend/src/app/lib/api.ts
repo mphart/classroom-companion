@@ -2,6 +2,45 @@ import { clearSession, getToken } from '@/app/lib/authSession';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
+/** Failed API response with optional structured `details` from the server body. */
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly details?: Record<string, unknown>;
+
+  constructor(message: string, status: number, details?: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.details = details;
+  }
+}
+
+/** Turn server `details` into a short secondary line for toasts or inline errors. */
+export function formatApiErrorDetails(details: Record<string, unknown>, maxLen = 1200): string {
+  const stderr = details.stderrTail;
+  if (typeof stderr === 'string' && stderr.trim()) return stderr.trim().slice(0, maxLen);
+  const transcript = details.transcript;
+  if (transcript && typeof transcript === 'object') {
+    const t = transcript as Record<string, unknown>;
+    const te = t.error;
+    if (typeof te === 'string' && te.trim()) return te.trim().slice(0, maxLen);
+    if (te && typeof te === 'object') {
+      const o = te as Record<string, unknown>;
+      if (typeof o.message === 'string' && o.message.trim()) return o.message.trim().slice(0, maxLen);
+    }
+  }
+  const err = details.error;
+  if (err && typeof err === 'object') {
+    const o = err as Record<string, unknown>;
+    if (typeof o.message === 'string' && o.message.trim()) return o.message.trim().slice(0, maxLen);
+  }
+  try {
+    return JSON.stringify(details, null, 2).slice(0, maxLen);
+  } catch {
+    return String(details).slice(0, maxLen);
+  }
+}
+
 export type ListedItemDto = {
   id: number;
   type: 'folder' | 'note';
@@ -36,6 +75,7 @@ export type NoteDto = {
   generatedFromCount: number | null;
   /** Present for slide PDF notes — path relative to API origin (use with auth fetch). */
   pdfUrl?: string;
+  youtubeSourceUrl?: string;
 };
 
 async function parseBody(res: Response): Promise<unknown> {
@@ -80,11 +120,17 @@ async function fetchJson(method: string, path: string, body?: unknown): Promise<
     if (typeof errField === 'string') message = errField;
     else if (typeof errField === 'number' || typeof errField === 'boolean') message = String(errField);
 
+    let details: Record<string, unknown> | undefined;
+    if (typeof payload === 'object' && payload !== null && 'details' in payload) {
+      const d = (payload as { details: unknown }).details;
+      if (d && typeof d === 'object' && !Array.isArray(d)) details = d as Record<string, unknown>;
+    }
+
     if (res.status === 401 && !suppressAuthHardRedirect(path)) {
       clearSession();
       window.location.assign('/');
     }
-    throw new Error(message);
+    throw new ApiRequestError(message, res.status, details);
   }
 
   return payload;
@@ -174,11 +220,16 @@ export async function uploadSlidePdf(directory: string, file: File, title?: stri
         ? (payload as { error: unknown }).error
         : undefined;
     if (typeof errField === 'string') message = errField;
+    let details: Record<string, unknown> | undefined;
+    if (typeof payload === 'object' && payload !== null && 'details' in payload) {
+      const d = (payload as { details: unknown }).details;
+      if (d && typeof d === 'object' && !Array.isArray(d)) details = d as Record<string, unknown>;
+    }
     if (res.status === 401) {
       clearSession();
       window.location.assign('/');
     }
-    throw new Error(message);
+    throw new ApiRequestError(message, res.status, details);
   }
 
   const body = payload as { note: NoteDto };
@@ -285,6 +336,7 @@ export async function regenerateNoteAiSummary(noteId: number): Promise<NoteDto> 
 export async function parseYoutubeVideo(body: {
   youtubeUrl: string;
   directory: string;
+  language?: string;
   /** Optional note title; server may default from video metadata. */
   title?: string;
 }): Promise<{ note: NoteDto }> {

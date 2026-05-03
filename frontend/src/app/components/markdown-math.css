@@ -1,0 +1,20 @@
+/* KaTeX overrides scoped to MarkdownPreview. */
+
+.markdown-preview .katex-display {
+  margin: 1rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.markdown-preview .katex-display > .katex {
+  display: inline-block;
+  white-space: nowrap;
+  text-align: initial;
+}
+
+/* Inline math should sit on the text baseline without odd line-height bumps. */
+.markdown-preview .katex {
+  font-size: 1.05em;
+  line-height: 1.2;
+}

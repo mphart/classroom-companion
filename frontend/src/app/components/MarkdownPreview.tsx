@@ -1,7 +1,11 @@
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import 'katex/dist/katex.min.css';
+import './markdown-math.css';
 
 const components: Components = {
   h1: ({ children, ...props }) => (
@@ -138,7 +142,11 @@ type MarkdownPreviewProps = {
 export function MarkdownPreview({ markdown, className = '' }: MarkdownPreviewProps) {
   return (
     <div className={`markdown-preview text-foreground ${className}`.trim()}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={components}
+      >
         {markdown}
       </ReactMarkdown>
     </div>

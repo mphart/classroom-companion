@@ -16,6 +16,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   Bell,
   Calendar,
+  Check,
   ChevronLeft,
   ChevronRight,
   Clapperboard,
@@ -298,13 +299,17 @@ function BrowseItemCard({
         <div className="grid w-full grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_auto] items-center gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {selectionMode ? (
-              <input
-                type="checkbox"
-                checked={selected}
-                onChange={() => {}}
-                className="pointer-events-none h-4 w-4 shrink-0"
+              <span
                 aria-hidden
-              />
+                className={cn(
+                  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors',
+                  selected
+                    ? 'border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_0_0_1px_color-mix(in_srgb,var(--brand)_35%,transparent)]'
+                    : 'border-border bg-background text-transparent',
+                )}
+              >
+                <Check className="size-3" />
+              </span>
             ) : null}
             <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
             <span className="truncate text-sm font-medium">{item.name}</span>
@@ -359,12 +364,17 @@ function BrowseItemCard({
     >
       <div className={cn('flex items-start gap-3', layout === 'list' && 'w-full')}>
         {selectionMode && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => {}}
-            className="pointer-events-none mt-1"
-          />
+          <span
+            aria-hidden
+            className={cn(
+              'mt-1 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors',
+              selected
+                ? 'border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_0_0_1px_color-mix(in_srgb,var(--brand)_35%,transparent)]'
+                : 'border-border bg-background text-transparent',
+            )}
+          >
+            <Check className="size-3" />
+          </span>
         )}
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex w-full min-w-0 items-center gap-2">
@@ -432,13 +442,17 @@ function CalendarItemBar({
         onClick={() => onActivate(item)}
       >
         {selectionMode ? (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => {}}
-            className="pointer-events-none h-3 w-3 shrink-0"
+          <span
             aria-hidden
-          />
+            className={cn(
+              'inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors',
+              selected
+                ? 'border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_0_0_1px_color-mix(in_srgb,var(--brand)_35%,transparent)]'
+                : 'border-border bg-background text-transparent',
+            )}
+          >
+            <Check className="size-2.5" />
+          </span>
         ) : null}
         <span className="inline-flex shrink-0 items-center justify-center">{browseItemLeadingIcon(item)}</span>
         <span className="truncate">{item.name}</span>
@@ -1614,18 +1628,36 @@ export function Home() {
               </motion.button>
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={selectionMode}
-                onChange={(e) => {
-                  setSelectionMode(e.target.checked);
-                  if (!e.target.checked) setSelectedItems(new Set());
-                }}
-                className="h-4 w-4"
-              />
-              <span className="text-sm">Select</span>
-            </label>
+            <button
+              type="button"
+              aria-pressed={selectionMode}
+              onClick={() => {
+                setSelectionMode((prev) => {
+                  const next = !prev;
+                  if (!next) setSelectedItems(new Set());
+                  return next;
+                });
+              }}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                selectionMode
+                  ? 'border-[var(--brand-soft-border)] bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:text-[var(--brand)]'
+                  : 'border-border bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-flex h-4 w-4 items-center justify-center rounded-[5px] border transition-colors',
+                  selectionMode
+                    ? 'border-[var(--brand)] bg-[var(--brand)] text-white'
+                    : 'border-border bg-background text-transparent',
+                )}
+                aria-hidden
+              >
+                <Check className="size-3" />
+              </span>
+              <span>{selectionMode ? 'Selection on' : 'Select'}</span>
+            </button>
           </div>
         </motion.div>
 
@@ -2105,48 +2137,38 @@ export function Home() {
             <aside className="shrink-0 rounded-lg border border-border bg-card px-4 py-3 lg:w-52 dark:border-[color-mix(in_srgb,var(--brand)_20%,transparent)] dark:bg-[oklch(0.14_0.02_150/0.5)]">
               <p className="mb-3 text-sm font-medium text-foreground">Show</p>
               <div className="flex flex-col gap-2 text-sm">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40">
+                  <Checkbox
                     checked={showCalendarFolders}
-                    onChange={(e) => setShowCalendarFolders(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+                    onCheckedChange={(v) => setShowCalendarFolders(v === true)}
                   />
                   Folders
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40">
+                  <Checkbox
                     checked={showCalendarNotes}
-                    onChange={(e) => setShowCalendarNotes(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+                    onCheckedChange={(v) => setShowCalendarNotes(v === true)}
                   />
                   Notes
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40">
+                  <Checkbox
                     checked={showCalendarSummaries}
-                    onChange={(e) => setShowCalendarSummaries(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+                    onCheckedChange={(v) => setShowCalendarSummaries(v === true)}
                   />
                   Summaries
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40">
+                  <Checkbox
                     checked={showCalendarFlashcards}
-                    onChange={(e) => setShowCalendarFlashcards(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+                    onCheckedChange={(v) => setShowCalendarFlashcards(v === true)}
                   />
                   Flashcards
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-muted/40">
+                  <Checkbox
                     checked={showCalendarImportant}
-                    onChange={(e) => setShowCalendarImportant(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+                    onCheckedChange={(v) => setShowCalendarImportant(v === true)}
                   />
                   Important dates
                 </label>

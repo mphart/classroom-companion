@@ -117,6 +117,12 @@ export class MySqlRepository implements Repository {
     const sortBy = sortByMap[params.sortBy ?? "lastEditedDate"];
     const sortDir: SortDir = params.sortDir ?? "desc";
     const query = params.query ? `%${params.query}%` : null;
+    const dir = normalizePath(params.directoryPath);
+    const tree = params.tree ?? false;
+    const pathSql = tree
+      ? "(i.directory_path = ? OR i.directory_path LIKE ?)"
+      : "i.directory_path = ?";
+    const pathParams = tree ? [dir, `${dir}%`] : [dir];
     const sql = `
       SELECT
         i.id,
@@ -129,12 +135,12 @@ export class MySqlRepository implements Repository {
         n.source_type AS note_source_type
       FROM items i
       LEFT JOIN notes n ON i.type = 'note' AND n.item_id = i.id
-      WHERE i.user_id = ? AND i.directory_path = ? AND (? IS NULL OR i.name LIKE ?)
+      WHERE i.user_id = ? AND ${pathSql} AND (? IS NULL OR i.name LIKE ?)
       ORDER BY ${sortBy} ${sortDir === "asc" ? "ASC" : "DESC"}
     `;
     const [rows] = await this.pool.execute<ItemRow[]>(sql, [
       params.userId,
-      normalizePath(params.directoryPath),
+      ...pathParams,
       query,
       query,
     ]);

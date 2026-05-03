@@ -6,6 +6,8 @@ import type { Repository } from "../repositories/repository";
 
 const listItemsQuerySchema = z.object({
   directory: z.string().trim().min(1),
+  /** When `"true"`, list all items under `directory` (recursive by path prefix). */
+  tree: z.enum(["true", "false"]).optional(),
   q: z.string().trim().optional(),
   sortBy: z.enum(["name", "lastEditedDate", "creationDate"]).optional(),
   sortDir: z.enum(["asc", "desc"]).optional(),
@@ -41,6 +43,7 @@ export const createItemRoutes = (repo: Repository): Router => {
       const items = await repo.listItems({
         userId: req.authUserId!,
         directoryPath: query.directory,
+        tree: query.tree === "true",
         query: query.q,
         sortBy: query.sortBy as SortBy | undefined,
         sortDir: query.sortDir as SortDir | undefined,

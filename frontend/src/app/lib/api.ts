@@ -96,11 +96,14 @@ export async function apiPatch(path: string, body: unknown): Promise<unknown> {
 
 export async function listItems(params: {
   directory: string;
+  /** When true, include all items under this directory path (subfolders), not only immediate children. */
+  tree?: boolean;
   q?: string;
   sortBy?: 'name' | 'lastEditedDate' | 'creationDate';
   sortDir?: 'asc' | 'desc';
 }): Promise<ListedItemDto[]> {
   const qs = new URLSearchParams({ directory: params.directory });
+  if (params.tree) qs.set('tree', 'true');
   if (params.q) qs.set('q', params.q);
   if (params.sortBy) qs.set('sortBy', params.sortBy);
   if (params.sortDir) qs.set('sortDir', params.sortDir);

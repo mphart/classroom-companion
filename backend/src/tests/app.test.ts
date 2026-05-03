@@ -89,6 +89,37 @@ describe("MVP backend routes", () => {
     expect(oldPath.body.items).toHaveLength(0);
   });
 
+  it("lists subtree items when tree=true", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Physics",
+      directory: "1/",
+    });
+    await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Lecture-A",
+      directory: "1/Physics/",
+      rawText: "Intro.",
+      language: "English",
+      durationSeconds: 60,
+    });
+
+    const shallow = await request(app)
+      .get("/items")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ directory: "1/" });
+    expect(shallow.status).toBe(200);
+    expect(shallow.body.items).toHaveLength(1);
+    expect(shallow.body.items[0].type).toBe("folder");
+
+    const tree = await request(app)
+      .get("/items")
+      .set("Authorization", `Bearer ${token}`)
+      .query({ directory: "1/", tree: "true" });
+    expect(tree.status).toBe(200);
+    expect(tree.body.items.length).toBeGreaterThanOrEqual(2);
+    expect(tree.body.items.some((it: { type: string }) => it.type === "note")).toBe(true);
+  });
+
   it("summarizes one note and generates selection summary", async () => {
     const { app, token } = await bootstrap();
     await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({

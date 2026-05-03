@@ -41,7 +41,12 @@ export class InMemoryRepository implements Repository {
   async listItems(params: ListItemsParams): Promise<Item[]> {
     const query = params.query?.toLowerCase();
     const dir = normalizePath(params.directoryPath);
-    let result = this.items.filter((i) => i.userId === params.userId && i.directoryPath === dir);
+    const tree = params.tree ?? false;
+    let result = this.items.filter((i) => {
+      if (i.userId !== params.userId) return false;
+      if (!tree) return i.directoryPath === dir;
+      return i.directoryPath === dir || i.directoryPath.startsWith(dir);
+    });
     if (query) result = result.filter((i) => i.name.toLowerCase().includes(query));
     const sortBy = params.sortBy ?? "lastEditedDate";
     const sortDir = params.sortDir ?? "desc";

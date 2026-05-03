@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import { Calendar, Clipboard, LayoutGrid, Pencil } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clipboard, LayoutGrid, Pencil } from 'lucide-react';
 import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
@@ -32,14 +32,17 @@ import {
 /** Matches backend `items.name` / rename zod schema (`itemRoutes`). */
 const MAX_ITEM_NAME_LENGTH = 120;
 
-/** Matches sketch: list (rows), group (grid), timeline (creation date & time). */
-type FileViewMode = 'list' | 'group' | 'timeline';
+/** Clipboard = list rows, grid = tiles, calendar = month grid by creation date. */
+type FileViewMode = 'list' | 'group' | 'calendar';
 
-function formatExactCreatedAt(isoDate: string): string {
-  return new Date(isoDate).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+/** Local calendar day key for grouping API creation timestamps. */
+function localDayKeyFromIso(iso: string): string {
+  const x = new Date(iso);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 }
 
 function BrowseItemCard({
@@ -148,6 +151,12 @@ export function Home() {
   const [renameFieldError, setRenameFieldError] = useState('');
   const [folderBeingRenamed, setFolderBeingRenamed] = useState<ListedItemDto | null>(null);
   const [fileViewMode, setFileViewMode] = useState<FileViewMode>('list');
+  const [calendarVisibleMonth, setCalendarVisibleMonth] = useState(() => startOfMonth(new Date()));
+  const [calendarTreeItems, setCalendarTreeItems] = useState<ListedItemDto[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [showCalendarFolders, setShowCalendarFolders] = useState(true);
+  const [showCalendarNotes, setShowCalendarNotes] = useState(true);
+  const [showCalendarSummaries, setShowCalendarSummaries] = useState(true);
 
   useEffect(() => {
     setCurrentDirectory(userRoot);
@@ -180,6 +189,53 @@ export function Home() {
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
+
+  useEffect(() => {
+    if (fileViewMode !== 'calendar' || !userRoot || !currentDirectory) return;
+    let cancelled = false;
+    setCalendarLoading(true);
+    setError('');
+    void listItems({
+      directory: currentDirectory,
+      tree: true,
+      q: searchQuery.trim() || undefined,
+      sortBy: 'creationDate',
+      sortDir: 'desc',
+    })
+      .then((rows) => {
+        if (!cancelled) setCalendarTreeItems(rows);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load calendar items');
+      })
+      .finally(() => {
+        if (!cancelled) setCalendarLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileViewMode, userRoot, currentDirectory, searchQuery]);
+
+  const calendarFilteredItems = useMemo(() => {
+    return calendarTreeItems.filter((item) => {
+      if (item.type === 'folder') return showCalendarFolders;
+      if (item.noteSourceType === 'generated_summary') return showCalendarSummaries;
+      return showCalendarNotes;
+    });
+  }, [calendarTreeItems, showCalendarFolders, showCalendarNotes, showCalendarSummaries]);
+
+  const calendarItemsByDay = useMemo(() => {
+    const record: Record<string, ListedItemDto[]> = {};
+    for (const item of calendarFilteredItems) {
+      const k = localDayKeyFromIso(item.createdDate);
+      if (!record[k]) record[k] = [];
+      record[k].push(item);
+    }
+    for (const k of Object.keys(record)) {
+      record[k].sort((a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+    }
+    return record;
+  }, [calendarFilteredItems]);
 
   const atRoot = userRoot !== null && currentDirectory === userRoot;
 
@@ -349,18 +405,25 @@ export function Home() {
     return date.toLocaleDateString();
   };
 
-  const displayedItems = useMemo(() => {
-    if (fileViewMode !== 'timeline') return items;
-    return [...items].sort(
-      (a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime(),
-    );
-  }, [items, fileViewMode]);
-
   if (!sessionUser || !userId || !userRoot || !currentDirectory) {
     return <Navigate to="/" replace />;
   }
 
   const pathSegments = pathTitleSegments(currentDirectory, userId);
+
+  const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+  const calYear = calendarVisibleMonth.getFullYear();
+  const calMonth = calendarVisibleMonth.getMonth();
+  const calFirstWeekday = new Date(calYear, calMonth, 1).getDay();
+  const calDaysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const calendarCells: (number | null)[] = [];
+  for (let i = 0; i < calFirstWeekday; i++) calendarCells.push(null);
+  for (let d = 1; d <= calDaysInMonth; d++) calendarCells.push(d);
+  while (calendarCells.length % 7 !== 0) calendarCells.push(null);
+  const calMonthTitle = new Date(calYear, calMonth).toLocaleString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -508,13 +571,13 @@ export function Home() {
               <button
                 type="button"
                 role="radio"
-                aria-checked={fileViewMode === 'timeline'}
-                aria-label="Timeline view"
-                onClick={() => setFileViewMode('timeline')}
+                aria-checked={fileViewMode === 'list'}
+                aria-label="List view"
+                onClick={() => setFileViewMode('list')}
                 className={cn(
                   'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  fileViewMode === 'timeline'
+                  fileViewMode === 'list'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
@@ -540,13 +603,13 @@ export function Home() {
               <button
                 type="button"
                 role="radio"
-                aria-checked={fileViewMode === 'list'}
-                aria-label="List view"
-                onClick={() => setFileViewMode('list')}
+                aria-checked={fileViewMode === 'calendar'}
+                aria-label="Calendar view"
+                onClick={() => setFileViewMode('calendar')}
                 className={cn(
                   'flex min-w-11 flex-1 items-center justify-center px-3 py-2 outline-none transition-colors sm:min-w-12',
                   'focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  fileViewMode === 'list'
+                  fileViewMode === 'calendar'
                     ? 'bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] dark:bg-[var(--brand-soft-bg)] dark:text-[var(--brand)]'
                     : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
                 )}
@@ -604,115 +667,190 @@ export function Home() {
           </div>
         )}
 
-        {fileViewMode === 'timeline' ? (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
-                  {selectionMode ? (
-                    <th scope="col" className="w-10 px-3 py-2 font-medium" />
-                  ) : null}
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Created
-                  </th>
-                  <th scope="col" className="min-w-[12rem] px-3 py-2 font-medium">
-                    Name
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Kind
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Last edited
-                  </th>
-                  <th scope="col" className="w-12 px-2 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {displayedItems.map((item) => (
-                  <tr
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleItemClick(item)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleItemClick(item);
-                      }
-                    }}
-                    className={cn(
-                      'cursor-pointer border-b border-border last:border-b-0 hover:bg-accent/40',
-                      selectedItems.has(item.id) && 'bg-accent/25 ring-1 ring-inset ring-[var(--brand)]',
-                    )}
-                  >
-                    {selectionMode ? (
-                      <td className="px-3 py-3 align-middle">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={() => {}}
-                          className="pointer-events-none"
-                          aria-hidden
-                        />
-                      </td>
-                    ) : null}
-                    <td className="whitespace-nowrap px-3 py-3 align-middle tabular-nums text-muted-foreground">
-                      {formatExactCreatedAt(item.createdDate)}
-                    </td>
-                    <td className="max-w-[24rem] px-3 py-3 align-middle">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="shrink-0 text-xl">
-                          {item.type === 'folder'
-                            ? '📁'
-                            : item.noteSourceType === 'generated_summary'
-                              ? '🧠'
-                              : '📄'}
-                        </span>
-                        <span className="truncate font-medium text-foreground">{item.name}</span>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 align-middle text-muted-foreground">
-                      {item.type === 'folder'
-                        ? 'Folder'
-                        : item.noteSourceType === 'generated_summary'
-                          ? 'AI summary'
-                          : 'Note'}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 align-middle text-muted-foreground">
-                      {formatRelativeDate(item.lastEditedDate)}
-                    </td>
-                    <td className="px-1 py-3 align-middle">
-                      {item.type === 'folder' ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          disabled={loading}
-                          aria-label={`Rename folder ${item.name}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openRenameFolderDialog(item);
-                          }}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          <Pencil className="size-4" aria-hidden />
-                        </Button>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!loading && displayedItems.length === 0 ? (
-              <div className="border-t border-border px-4 py-10 text-center text-muted-foreground">
-                No files or folders in this location.
+        {fileViewMode === 'calendar' ? (
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+            <aside className="shrink-0 rounded-lg border border-border bg-card px-4 py-3 lg:w-52">
+              <p className="mb-3 text-sm font-medium text-foreground">Show</p>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarFolders}
+                    onChange={(e) => setShowCalendarFolders(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Folders
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarNotes}
+                    onChange={(e) => setShowCalendarNotes(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Notes
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarSummaries}
+                    onChange={(e) => setShowCalendarSummaries(e.target.checked)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  Summaries
+                </label>
               </div>
-            ) : null}
+              <p className="mt-4 text-xs text-muted-foreground">
+                Items use creation time and include everything under the current folder ({pathSegments.join(' / ') ||
+                  'Home'}
+                ).
+              </p>
+            </aside>
+
+            <div className="min-w-0 flex-1 rounded-lg border border-border bg-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Previous month"
+                  disabled={calendarLoading}
+                  onClick={() =>
+                    setCalendarVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+                  }
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-sm font-semibold tracking-wide uppercase text-foreground">
+                    {calMonthTitle}
+                  </span>
+                  {calendarLoading ? (
+                    <span className="text-xs text-muted-foreground">Loading…</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">
+                      {calendarFilteredItems.length} item{calendarFilteredItems.length === 1 ? '' : 's'} shown
+                    </span>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Next month"
+                  disabled={calendarLoading}
+                  onClick={() =>
+                    setCalendarVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+                  }
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-7 border-b border-border bg-muted/30 text-center text-xs font-medium text-muted-foreground">
+                {weekdayLabels.map((d) => (
+                  <div key={d} className="border-r border-border py-2 last:border-r-0">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-px bg-border p-px">
+                {calendarCells.map((day, idx) => {
+                  if (day === null) {
+                    return (
+                      <div
+                        key={`pad-${idx}`}
+                        className="min-h-[5.5rem] bg-muted/20"
+                        aria-hidden
+                      />
+                    );
+                  }
+                  const dayKey = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const dayItems = calendarItemsByDay[dayKey] ?? [];
+                  return (
+                    <div
+                      key={dayKey}
+                      className="flex min-h-[5.5rem] flex-col bg-card p-1"
+                    >
+                      <span className="mb-1 text-[0.65rem] font-medium tabular-nums text-muted-foreground">
+                        {day}
+                      </span>
+                      <div className="flex max-h-28 min-h-0 flex-col gap-1 overflow-y-auto">
+                        {dayItems.map((item) => {
+                          const icon =
+                            item.type === 'folder'
+                              ? '📁'
+                              : item.noteSourceType === 'generated_summary'
+                                ? '🧠'
+                                : '📄';
+                          return (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                'flex min-w-0 items-center gap-0.5 rounded-md border border-border/80 bg-muted/30 px-1 py-0.5',
+                                selectionMode && selectedItems.has(item.id) && 'ring-1 ring-[var(--brand)]',
+                              )}
+                            >
+                              <button
+                                type="button"
+                                className="flex min-w-0 flex-1 items-center gap-1 text-left text-[0.7rem] leading-tight text-foreground"
+                                onClick={() => handleItemClick(item)}
+                              >
+                                {selectionMode ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedItems.has(item.id)}
+                                    onChange={() => {}}
+                                    className="pointer-events-none h-3 w-3 shrink-0"
+                                    aria-hidden
+                                  />
+                                ) : null}
+                                <span className="shrink-0">{icon}</span>
+                                <span className="truncate">{item.name}</span>
+                              </button>
+                              {item.type === 'folder' ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                  disabled={loading}
+                                  aria-label={`Rename folder ${item.name}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openRenameFolderDialog(item);
+                                  }}
+                                >
+                                  <Pencil className="size-3" aria-hidden />
+                                </Button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!calendarLoading && calendarTreeItems.length > 0 && calendarFilteredItems.length === 0 ? (
+                <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                  No items match your filters. Turn on at least one type under Show.
+                </div>
+              ) : null}
+              {!calendarLoading && calendarTreeItems.length === 0 ? (
+                <div className="border-t border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                  No files or folders under this folder.
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : fileViewMode === 'list' ? (
           <div className="flex flex-col gap-2">
-            {displayedItems.map((item) => (
+            {items.map((item) => (
               <BrowseItemCard
                 key={item.id}
                 item={item}
@@ -725,7 +863,7 @@ export function Home() {
                 onRenameFolder={openRenameFolderDialog}
               />
             ))}
-            {!loading && displayedItems.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
                 No files or folders in this location.
               </div>
@@ -733,7 +871,7 @@ export function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-4">
-            {displayedItems.map((item) => (
+            {items.map((item) => (
               <BrowseItemCard
                 key={item.id}
                 item={item}
@@ -746,7 +884,7 @@ export function Home() {
                 onRenameFolder={openRenameFolderDialog}
               />
             ))}
-            {!loading && displayedItems.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <div className="col-span-4 rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
                 No files or folders in this location.
               </div>

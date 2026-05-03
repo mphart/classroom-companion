@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Clapperboard,
   Clipboard,
+  Download,
   FileUp,
   FolderPlus,
   LayoutGrid,
@@ -69,6 +70,7 @@ import {
   loadImportantEvents,
   type StoredImportantEvent,
 } from '@/app/lib/importantEventsStorage';
+import { buildIcs, downloadIcsFile, type CalendarIcsEvent } from '@/app/lib/calendarIcs';
 import { canCreateSubfolderInDirectory } from '@/app/lib/itemPathDepth';
 import {
   directoryAtSegmentIndex,
@@ -531,6 +533,8 @@ export function Home() {
   const [showCalendarSummaries, setShowCalendarSummaries] = useState(true);
   const [showCalendarFlashcards, setShowCalendarFlashcards] = useState(true);
   const [showCalendarImportant, setShowCalendarImportant] = useState(true);
+  const [calendarSyncDialogOpen, setCalendarSyncDialogOpen] = useState(false);
+  const [calendarSyncing, setCalendarSyncing] = useState(false);
   const [importantEvents, setImportantEvents] = useState<StoredImportantEvent[]>(() => loadImportantEvents());
   const [importantAlertOpen, setImportantAlertOpen] = useState(false);
   const [importantAlertList, setImportantAlertList] = useState<StoredImportantEvent[]>([]);
@@ -736,6 +740,74 @@ export function Home() {
     }
     return out;
   }, [importantEvents, calendarVisibleMonth, showCalendarImportant]);
+
+  const calendarExportEvents = useMemo<CalendarIcsEvent[]>(() => {
+    const y = calendarVisibleMonth.getFullYear();
+    const m = calendarVisibleMonth.getMonth();
+    const events: CalendarIcsEvent[] = [];
+
+    for (const item of calendarFilteredItems) {
+      const created = new Date(item.createdDate);
+      if (created.getFullYear() !== y || created.getMonth() !== m) continue;
+      const dateKey = localDayKeyFromIso(item.createdDate);
+      const isFolder = item.type === 'folder';
+      const label = browseItemTypeLabel(item);
+      const title = isFolder ? `Folder: ${item.name}` : `${label}: ${item.name}`;
+      const description = isFolder
+        ? `Folder created in Classroom Companion.\nPath: ${item.directory}`
+        : `Created in Classroom Companion.\nType: ${label}\nPath: ${item.directory}`;
+      events.push({
+        uid: `cc-item-${item.id}-${dateKey}`,
+        title,
+        dateKey,
+        description,
+      });
+    }
+
+    if (showCalendarImportant) {
+      for (const ev of importantEvents) {
+        const [ys, ms] = ev.dateKey.split('-');
+        const ey = Number.parseInt(ys ?? '', 10);
+        const em = Number.parseInt(ms ?? '', 10);
+        if (!Number.isFinite(ey) || !Number.isFinite(em)) continue;
+        if (ey !== y || em - 1 !== m) continue;
+        events.push({
+          uid: `cc-important-${ev.id}`,
+          title: `Important: ${ev.title}`,
+          dateKey: ev.dateKey,
+          description: `${ev.snippet}\nFrom: ${ev.noteTitle}`,
+        });
+      }
+    }
+
+    return events.sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.title.localeCompare(b.title));
+  }, [calendarFilteredItems, calendarVisibleMonth, importantEvents, showCalendarImportant]);
+
+  const handleExportCalendarIcs = useCallback(
+    async (target: 'apple' | 'google') => {
+      if (calendarExportEvents.length === 0) {
+        toast.error('No events to export for this month.');
+        return;
+      }
+      setCalendarSyncing(true);
+      try {
+        const ics = buildIcs(calendarExportEvents);
+        const ym = `${calendarVisibleMonth.getFullYear()}-${String(calendarVisibleMonth.getMonth() + 1).padStart(2, '0')}`;
+        downloadIcsFile(`classroom-companion-calendar-${ym}.ics`, ics);
+        setCalendarSyncDialogOpen(false);
+        toast.success(
+          target === 'apple'
+            ? 'ICS downloaded. Open it in Apple Calendar to import.'
+            : 'ICS downloaded. Import it in Google Calendar settings.',
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not export calendar.');
+      } finally {
+        setCalendarSyncing(false);
+      }
+    },
+    [calendarExportEvents, calendarVisibleMonth],
+  );
 
   const atRoot = userRoot !== null && currentDirectory === userRoot;
 
@@ -1679,6 +1751,57 @@ export function Home() {
         </Dialog>
 
         <Dialog
+          open={calendarSyncDialogOpen}
+          onOpenChange={(open) => {
+            if (!calendarSyncing) setCalendarSyncDialogOpen(open);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Sync this month to calendar</DialogTitle>
+              <DialogDescription>
+                Export visible events for {calMonthTitle} as an ICS file for Apple Calendar or Google Calendar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-1">
+              <p className="text-xs text-muted-foreground">
+                Export includes items currently shown by your calendar filters plus important dates.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {calendarExportEvents.length} event{calendarExportEvents.length === 1 ? '' : 's'} ready to export.
+              </p>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={calendarSyncing}
+                onClick={() => setCalendarSyncDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={calendarSyncing || calendarExportEvents.length === 0}
+                onClick={() => void handleExportCalendarIcs('apple')}
+              >
+                {calendarSyncing ? 'Exporting…' : 'Export for Apple Calendar'}
+              </Button>
+              <Button
+                type="button"
+                disabled={calendarSyncing || calendarExportEvents.length === 0}
+                onClick={() => void handleExportCalendarIcs('google')}
+                className="text-white"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                {calendarSyncing ? 'Exporting…' : 'Export for Google Calendar'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
           open={newFolderDialogOpen}
           onOpenChange={(open) => {
             setNewFolderDialogOpen(open);
@@ -2017,6 +2140,17 @@ export function Home() {
                   Important dates
                 </label>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full justify-center gap-1.5"
+                disabled={calendarLoading}
+                onClick={() => setCalendarSyncDialogOpen(true)}
+              >
+                <Download className="size-4" aria-hidden />
+                Sync calendar
+              </Button>
               {!atRoot ? (
                 <div className="mt-4">
                   <p className="mb-2 text-xs font-medium text-foreground">Parent</p>
@@ -2062,19 +2196,32 @@ export function Home() {
                     </span>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0"
-                  aria-label="Next month"
-                  disabled={calendarLoading}
-                  onClick={() =>
-                    setCalendarVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
-                  }
-                >
-                  <ChevronRight className="size-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Next month"
+                    disabled={calendarLoading}
+                    onClick={() =>
+                      setCalendarVisibleMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+                    }
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5"
+                    disabled={calendarLoading}
+                    onClick={() => setCalendarSyncDialogOpen(true)}
+                  >
+                    <Download className="size-4" aria-hidden />
+                    Sync calendar
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-7 border-b border-border bg-muted/30 text-center text-xs font-medium text-muted-foreground">

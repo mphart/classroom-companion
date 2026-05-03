@@ -458,6 +458,15 @@ export function Home() {
   }, [userRoot]);
 
   useEffect(() => {
+    if (!userRoot) return;
+    const st = location.state as { browseDirectory?: string } | null | undefined;
+    const dir = st?.browseDirectory;
+    if (typeof dir === 'string' && dir.length > 0 && dir.startsWith(userRoot)) {
+      setCurrentDirectory(dir);
+    }
+  }, [location.key, userRoot, location.state]);
+
+  useEffect(() => {
     const pending = consumePendingImportantAlerts();
     setImportantEvents(loadImportantEvents());
     if (pending.length > 0) {
@@ -640,7 +649,10 @@ export function Home() {
       return;
     }
 
-    navigate({ pathname: '/viewer', search: `?noteId=${String(item.id)}` }, { state: { noteId: item.id } });
+    navigate(
+      { pathname: '/viewer', search: `?noteId=${String(item.id)}` },
+      { state: { noteId: item.id, browseDirectory: currentDirectory } },
+    );
   };
 
   const goUpOneLevel = () => {
@@ -674,7 +686,10 @@ export function Home() {
       const note = await uploadSlidePdf(currentDirectory, file);
       await loadItems();
       toast.success('Slides uploaded');
-      navigate({ pathname: '/viewer', search: `?noteId=${String(note.id)}` }, { state: { noteId: note.id } });
+      navigate(
+        { pathname: '/viewer', search: `?noteId=${String(note.id)}` },
+        { state: { noteId: note.id, browseDirectory: currentDirectory } },
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
       toast.error(err instanceof Error ? err.message : 'Upload failed');
@@ -752,7 +767,7 @@ export function Home() {
       toast.success('Video parsed');
       navigate(
         { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
-        { state: { noteId: result.note.id } },
+        { state: { noteId: result.note.id, browseDirectory: currentDirectory } },
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not parse video';
@@ -779,7 +794,7 @@ export function Home() {
   };
 
   const handleGeneratePracticeExam = async () => {
-    if (!userRoot || selectedItems.size === 0) return;
+    if (!userRoot || !currentDirectory || selectedItems.size === 0) return;
     if (!examIncludeMc && !examIncludeSa) {
       setError('Choose at least one question type.');
       return;
@@ -804,7 +819,7 @@ export function Home() {
       const result = await generatePracticeExam({
         noteIds,
         folderIds,
-        outputDirectory: userRoot,
+        outputDirectory: currentDirectory,
         title,
         questionCount: count,
         includeMultipleChoice: examIncludeMc,
@@ -813,10 +828,9 @@ export function Home() {
       });
 
       setExamDialogOpen(false);
-      setCurrentDirectory(userRoot);
       setSelectedItems(new Set());
       setSelectionMode(false);
-      navigate('/practice-exam', { state: { noteId: result.note.id } });
+      navigate('/practice-exam', { state: { noteId: result.note.id, browseDirectory: currentDirectory } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate practice exam');
     } finally {
@@ -878,7 +892,7 @@ export function Home() {
   };
 
   const handleGenerateSummary = async () => {
-    if (!userRoot || selectedItems.size === 0) return;
+    if (!userRoot || !currentDirectory || selectedItems.size === 0) return;
     setLoading(true);
     setError('');
 
@@ -893,16 +907,15 @@ export function Home() {
       const result = await summarizeSelection({
         noteIds,
         folderIds,
-        outputDirectory: userRoot,
+        outputDirectory: currentDirectory,
         title,
       });
 
-      setCurrentDirectory(userRoot);
       setSelectedItems(new Set());
       setSelectionMode(false);
       navigate(
         { pathname: '/viewer', search: `?noteId=${String(result.note.id)}` },
-        { state: { noteId: result.note.id } },
+        { state: { noteId: result.note.id, browseDirectory: currentDirectory } },
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate summary');
@@ -1366,7 +1379,10 @@ export function Home() {
                       size="sm"
                       onClick={() => {
                         setImportantAlertOpen(false);
-                        navigate({ pathname: '/viewer', search: `?noteId=${String(ev.noteId)}` }, { state: { noteId: ev.noteId } });
+                        navigate(
+                          { pathname: '/viewer', search: `?noteId=${String(ev.noteId)}` },
+                          { state: { noteId: ev.noteId, browseDirectory: currentDirectory } },
+                        );
                       }}
                     >
                       Open note
@@ -1749,7 +1765,7 @@ export function Home() {
                             onOpenNote={() =>
                               navigate(
                                 { pathname: '/viewer', search: `?noteId=${String(ev.noteId)}` },
-                                { state: { noteId: ev.noteId } },
+                                { state: { noteId: ev.noteId, browseDirectory: currentDirectory } },
                               )
                             }
                           />

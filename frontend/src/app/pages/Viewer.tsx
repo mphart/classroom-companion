@@ -12,6 +12,7 @@ import '@/styles/brand-ambient.css';
 
 type ViewerState = {
   noteId?: number;
+  browseDirectory?: string;
 } | null;
 
 function parseNoteIdFromSearch(searchParams: URLSearchParams): number | undefined {
@@ -44,9 +45,13 @@ export function Viewer() {
   useEffect(() => {
     if (noteId === undefined) return;
     if (!searchParams.get('noteId')) {
-      navigate(`/viewer?noteId=${noteId}`, { replace: true, state: { noteId } });
+      const browseDirectory = viewerState?.browseDirectory;
+      navigate(`/viewer?noteId=${noteId}`, {
+        replace: true,
+        state: browseDirectory !== undefined ? { noteId, browseDirectory } : { noteId },
+      });
     }
-  }, [noteId, navigate, searchParams]);
+  }, [noteId, navigate, searchParams, viewerState?.browseDirectory]);
 
   useEffect(() => {
     if (noteId === undefined) return;
@@ -123,6 +128,15 @@ export function Viewer() {
   if (!noteId) {
     return <Navigate to="/home" replace />;
   }
+
+  const browseDirectoryForBack = viewerState?.browseDirectory ?? note?.directory;
+  const goBackToLibrary = () => {
+    navigate('/home', browseDirectoryForBack ? { state: { browseDirectory: browseDirectoryForBack } } : undefined);
+  };
+  const practiceExamLocationState = {
+    noteId,
+    ...(browseDirectoryForBack ? { browseDirectory: browseDirectoryForBack } : {}),
+  };
 
   const firstName = sessionUser ? firstNameFromDisplayName(sessionUser.name) : 'there';
   const dayGreet = timeOfDayGreeting();
@@ -233,10 +247,10 @@ export function Viewer() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate('/home')}
+              onClick={goBackToLibrary}
               className="rounded-lg border border-border px-4 py-2 hover:bg-accent hover:text-accent-foreground"
             >
-              ← Back to Home
+              ← Back
             </button>
             {note?.sourceType === 'recording' || note?.sourceType === 'slide_pdf' ? (
               <button
@@ -260,7 +274,7 @@ export function Viewer() {
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                onClick={() => navigate('/practice-exam', { state: practiceExamLocationState })}
                 className="rounded-lg px-4 py-2 text-white disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand)' }}
               >
@@ -304,7 +318,7 @@ export function Viewer() {
                       {noteId !== undefined ? (
                         <button
                           type="button"
-                          onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                          onClick={() => navigate('/practice-exam', { state: practiceExamLocationState })}
                           className="rounded-lg px-6 py-2.5 text-white"
                           style={{ backgroundColor: 'var(--brand)' }}
                         >

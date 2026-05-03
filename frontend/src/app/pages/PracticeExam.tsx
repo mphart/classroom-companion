@@ -49,13 +49,15 @@ function parseExamDoc(rawText: string): ExamDoc | null {
   }
 }
 
-type LocationState = { noteId?: number } | null;
+type LocationState = { noteId?: number; browseDirectory?: string } | null;
 
 export function PracticeExam() {
   const navigate = useNavigate();
   const location = useLocation();
   const reduceMotion = useReducedMotion();
-  const noteId = (location.state as LocationState)?.noteId;
+  const routeState = location.state as LocationState;
+  const noteId = routeState?.noteId;
+  const browseDirectoryFromState = routeState?.browseDirectory;
 
   const [note, setNote] = useState<NoteDto | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,6 +164,11 @@ export function PracticeExam() {
     return <Navigate to="/home" replace />;
   }
 
+  const browseDirectoryForBack = browseDirectoryFromState ?? note?.directory;
+  const goBackToLibrary = () => {
+    navigate('/home', browseDirectoryForBack ? { state: { browseDirectory: browseDirectoryForBack } } : undefined);
+  };
+
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
@@ -187,10 +194,10 @@ export function PracticeExam() {
             <img src={logo} alt="ClassroomCompanion" className="h-10 w-10 rounded-md" />
             <button
               type="button"
-              onClick={() => navigate('/home')}
+              onClick={goBackToLibrary}
               className="px-3 py-2 border border-border rounded-lg hover:bg-accent hover:text-accent-foreground text-sm"
             >
-              ← Home
+              ← Back
             </button>
           </div>
           <h1 className="max-w-[50%] truncate text-right text-lg font-semibold">

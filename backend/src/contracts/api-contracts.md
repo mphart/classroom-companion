@@ -47,9 +47,9 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `POST /ai/summarize/note/:noteId`
   - Response `200`: `{ "note": { ...with aiSummary populated... } }`
 - `POST /ai/summarize/selection`
-  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary", "outputLanguage"?: "Spanish" }` — optional **`outputLanguage`** overrides inference; if omitted and **every** source note shares the same `language`, Gemini uses that language and the new note’s `language` field is set accordingly (otherwise defaults to English).
+  - Request: `{ "noteIds": [1, 2], "folderIds": [3], "outputDirectory": "userId/physics/", "title": "Midterm Review Summary", "outputLanguage"?: "Spanish" }` — optional **`outputLanguage`** overrides inference. If omitted, output defaults to **English** unless the nonempty sources include at least one **`recording`** and **every** such recording shares the same **non-English** `language` (mixed languages or any English recording → English). Languages on `generated_summary` / `generated_practice_exam` notes are ignored for inference.
   - Response `201`: `{ "note": { ...sourceType: "generated_summary"... }, "sourceCount": 5 }`
-  - Single-note summarize uses the stored note’s `language` field to steer Gemini output.
+  - Single-note summarize: for a **`recording`**, Gemini follows that note’s `language` when it is not English; otherwise output defaults to English.
 
 ## Practice exams (Gemini)
 

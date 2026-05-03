@@ -1,4 +1,5 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
+import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import type { AuthUser, CreateNoteInput, Item, Note, SortBy, SortDir, User } from "../types";
 import type { ListItemsParams, Repository } from "./repository";
 
@@ -327,15 +328,17 @@ export class MySqlRepository implements Repository {
     const ids = [...selected];
     const marks = ids.map(() => "?").join(",");
     const [rows] = await this.pool.execute<NoteRow[]>(
-      `SELECT raw_text, language FROM notes WHERE item_id IN (${marks}) ORDER BY FIELD(item_id, ${marks})`,
+      `SELECT raw_text, language, source_type FROM notes WHERE item_id IN (${marks}) ORDER BY FIELD(item_id, ${marks})`,
       [...ids, ...ids],
     );
     const nonempty = rows.filter((r) => typeof r.raw_text === "string" && r.raw_text.trim().length > 0);
     nonempty.forEach((row) => texts.push(row.raw_text));
-    const langs = nonempty.map((r) => r.language?.trim()).filter(Boolean);
-    const unique = new Set(langs);
-    const summarizeLanguage =
-      nonempty.length > 0 && langs.length === nonempty.length && unique.size === 1 ? [...unique][0]! : null;
+    const summarizeLanguage = inferSelectionSummaryLanguage(
+      nonempty.map((r) => ({
+        language: (r.language ?? "English").trim() || "English",
+        sourceType: r.source_type,
+      })),
+    );
     return { texts, sourceCount: texts.length, summarizeLanguage };
   }
 }

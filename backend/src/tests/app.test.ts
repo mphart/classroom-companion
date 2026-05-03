@@ -198,6 +198,41 @@ describe("MVP backend routes", () => {
     expect(sel.body.note.language).toBe("Spanish");
   });
 
+  it("selection summary defaults to English when selection has no recordings", async () => {
+    const { app, token } = await bootstrap();
+    const recording = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Lec",
+      directory: "1/",
+      rawText: "Contenido en español.",
+      language: "Spanish",
+      durationSeconds: 60,
+    });
+    const first = await request(app)
+      .post("/ai/summarize/selection")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteIds: [recording.body.note.id],
+        folderIds: [],
+        outputDirectory: "1/",
+        title: "Resumen uno",
+      });
+    expect(first.status).toBe(201);
+    expect(first.body.note.sourceType).toBe("generated_summary");
+    expect(first.body.note.language).toBe("Spanish");
+
+    const second = await request(app)
+      .post("/ai/summarize/selection")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteIds: [first.body.note.id],
+        folderIds: [],
+        outputDirectory: "1/",
+        title: "Meta summary",
+      });
+    expect(second.status).toBe(201);
+    expect(second.body.note.language).toBe("English");
+  });
+
   it("generates practice exam from selection and grades short answers", async () => {
     const { app, token } = await bootstrap();
     await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({

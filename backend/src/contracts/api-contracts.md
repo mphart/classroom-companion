@@ -57,8 +57,8 @@ Server uses **`PRACTICE_API_KEY`** (not `GEMINI_API_KEY`) for generate and grade
 
 - `POST /ai/practice-exam/generate`
   - Request:
-    - `{ "noteIds": [1], "folderIds": [2], "outputDirectory": "userId/", "title": "Unit 2 Quiz", "questionCount": 10, "includeMultipleChoice": true, "includeShortAnswer": true, "otherInstructions": "Focus on definitions" }`
-    - At least one of `includeMultipleChoice` / `includeShortAnswer` must be true. `questionCount` is 1–30.
+    - `{ "noteIds": [1], "folderIds": [2], "outputDirectory": "userId/", "title": "Unit 2 Quiz", "questionCount": 10, "includeMultipleChoice": true, "includeShortAnswer": true, "otherInstructions": "Focus on definitions", "outputLanguage"?: "Spanish" }`
+    - At least one of `includeMultipleChoice` / `includeShortAnswer` must be true. `questionCount` is 1–30. Optional **`outputLanguage`** overrides inference; if omitted, the exam is in **English** unless selected sources follow the same rules as AI summaries (non-English **recording** notes that agree on one language → exam and stored `note.language` in that language).
   - Response `201`: `{ "note": { ...sourceType: "generated_practice_exam", "rawText": "<JSON exam document>", ... }, "sourceCount": 5 }`
   - The note’s `rawText` is a JSON object: `{ "version": 1, "title": string, "questions": [ ... ] }` with each question either `multiple_choice` (`prompt`, `options`, `correctIndex`, optional `explanation`) or `short_answer` (`prompt`, `referenceAnswer`).
 

@@ -28,6 +28,7 @@ const practiceExamGenerateSchema = z
     includeMultipleChoice: z.boolean(),
     includeShortAnswer: z.boolean(),
     otherInstructions: z.string().trim().max(2000).optional(),
+    outputLanguage: z.string().trim().min(1).max(80).optional(),
   })
   .refine((b) => b.includeMultipleChoice || b.includeShortAnswer, {
     message: "Select at least one question type.",
@@ -92,13 +93,14 @@ export const createAiRoutes = (repo: Repository): Router => {
   router.post("/practice-exam/generate", async (req: AuthenticatedRequest, res, next) => {
     try {
       const body = practiceExamGenerateSchema.parse(req.body);
-      const { texts, sourceCount } = await repo.collectSummarySources({
+      const { texts, sourceCount, summarizeLanguage } = await repo.collectSummarySources({
         userId: req.authUserId!,
         noteIds: body.noteIds,
         folderIds: body.folderIds,
       });
       if (texts.length === 0) return res.status(400).json({ error: "No source notes found for selected inputs." });
 
+      const outputLanguage = body.outputLanguage ?? summarizeLanguage ?? undefined;
       const exam = await generatePracticeExamFromSources({
         texts,
         title: body.title,
@@ -106,14 +108,16 @@ export const createAiRoutes = (repo: Repository): Router => {
         includeMultipleChoice: body.includeMultipleChoice,
         includeShortAnswer: body.includeShortAnswer,
         otherInstructions: body.otherInstructions,
+        outputLanguage,
       });
 
+      const createdLanguage = outputLanguage?.trim() || "English";
       const created = await repo.createNote({
         userId: req.authUserId!,
         title: body.title,
         directoryPath: body.outputDirectory,
         rawText: JSON.stringify(exam),
-        language: "English",
+        language: createdLanguage,
         durationSeconds: 0,
         sourceType: "generated_practice_exam",
         generatedFromCount: sourceCount,
@@ -142,7 +146,11 @@ export const createAiRoutes = (repo: Repository): Router => {
       if (body.responses.length === 0) {
         return res.json({ results: [] });
       }
-      const results = await gradeShortAnswers({ exam, responses: body.responses });
+      const results = await gradeShortAnswers({
+        exam,
+        responses: body.responses,
+        feedbackLanguage: found.note.language,
+      });
       return res.json({ results });
     } catch (error) {
       return next(error);

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { BookOpen, FileText, Mic, Sparkles } from 'lucide-react';
+import { BookOpen, FileText, Mic, Presentation, Sparkles } from 'lucide-react';
 import logo from '@/imports/classroomcompanion_logo_v4.svg';
-import { getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
+import { fetchNotePdfBlob, getNote, regenerateNoteAiSummary, type NoteDto } from '@/app/lib/api';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
 import { getSessionUser } from '@/app/lib/authSession';
 import { firstNameFromDisplayName, timeOfDayGreeting, userInitials } from '@/app/lib/personalGreeting';
@@ -37,6 +37,8 @@ export function Viewer() {
   const [loading, setLoading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [error, setError] = useState('');
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+  const [pdfLoadError, setPdfLoadError] = useState('');
 
   useEffect(() => {
     if (noteId === undefined) return;
@@ -64,6 +66,42 @@ export function Viewer() {
       cancelled = true;
     };
   }, [noteId]);
+
+  useEffect(() => {
+    if (noteId === undefined || note?.sourceType !== 'slide_pdf') {
+      setPdfLoadError('');
+      setPdfObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      return;
+    }
+
+    let active = true;
+    setPdfLoadError('');
+    setPdfObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+
+    void fetchNotePdfBlob(noteId)
+      .then((blob) => {
+        if (!active) return;
+        const url = URL.createObjectURL(blob);
+        setPdfObjectUrl(url);
+      })
+      .catch((err) => {
+        if (active) setPdfLoadError(err instanceof Error ? err.message : 'Could not load PDF.');
+      });
+
+    return () => {
+      active = false;
+      setPdfObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [noteId, note?.sourceType]);
 
   const handleAiSummarize = async () => {
     if (noteId === undefined) return;
@@ -99,13 +137,16 @@ export function Viewer() {
             ? 'AI-generated summary note'
             : note.sourceType === 'generated_practice_exam'
               ? 'Generated practice exam'
-              : 'Saved lecture note'
+              : note.sourceType === 'slide_pdf'
+                ? 'PDF slide deck'
+                : 'Saved lecture note'
           : '';
 
   const noteKindMeta = useMemo(() => {
     if (!note) return { label: 'Note', Icon: FileText };
     if (note.sourceType === 'generated_summary') return { label: 'AI summary', Icon: Sparkles };
     if (note.sourceType === 'generated_practice_exam') return { label: 'Practice exam', Icon: BookOpen };
+    if (note.sourceType === 'slide_pdf') return { label: 'Slide deck (PDF)', Icon: Presentation };
     if (note.sourceType === 'recording') return { label: 'Lecture capture', Icon: Mic };
     return { label: 'Note', Icon: FileText };
   }, [note]);
@@ -158,6 +199,9 @@ export function Viewer() {
               {note && note.sourceType === 'recording' ? (
                 <span className="mt-1 block">Note language: {note.language}</span>
               ) : null}
+              {note && note.sourceType === 'slide_pdf' ? (
+                <span className="mt-1 block text-muted-foreground">Text was extracted for search and AI tools.</span>
+              ) : null}
             </p>
           </div>
 
@@ -188,13 +232,15 @@ export function Viewer() {
             >
               ← Back to Home
             </button>
-            {note?.sourceType === 'recording' ? (
+            {note?.sourceType === 'recording' || note?.sourceType === 'slide_pdf' ? (
               <button
                 type="button"
                 disabled={summarizing || loading || !note.rawText?.trim()}
                 title={
                   !note?.rawText?.trim()
-                    ? 'Add transcript text to this note before summarizing.'
+                    ? note?.sourceType === 'slide_pdf'
+                      ? 'No extractable text yet — try a text-based PDF.'
+                      : 'Add transcript text to this note before summarizing.'
                     : 'Generate an AI summary from this lecture'
                 }
                 onClick={() => void handleAiSummarize()}
@@ -227,7 +273,7 @@ export function Viewer() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-8">
-          <div className="mx-auto max-w-3xl">
+          <div className={`mx-auto ${note?.sourceType === 'slide_pdf' ? 'max-w-5xl' : 'max-w-3xl'}`}>
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -269,6 +315,42 @@ export function Viewer() {
                         />
                       </div>
                     </div>
+                  ) : note.sourceType === 'slide_pdf' ? (
+                    <>
+                      <div>
+                        <h2 className="mb-3 text-2xl">Slides</h2>
+                        {pdfLoadError ? (
+                          <p className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-destructive">
+                            {pdfLoadError}
+                          </p>
+                        ) : pdfObjectUrl ? (
+                          <iframe
+                            title={note.title}
+                            src={pdfObjectUrl}
+                            className="h-[min(78vh,56rem)] w-full rounded-lg border border-border bg-muted/20"
+                          />
+                        ) : (
+                          <p className="text-muted-foreground">Loading PDF…</p>
+                        )}
+                      </div>
+                      {note.aiSummary ? (
+                        <div>
+                          <h2 className="mb-3 mt-8 text-2xl">AI summary</h2>
+                          <div className="rounded-lg border border-border bg-muted/20 p-6">
+                            <MarkdownPreview markdown={note.aiSummary} />
+                          </div>
+                        </div>
+                      ) : null}
+                      <div>
+                        <h2 className="mb-3 mt-8 text-2xl">Extracted text</h2>
+                        <p className="mb-2 text-sm text-muted-foreground">
+                          Used for summaries and practice exams when you select this deck on Home.
+                        </p>
+                        <div className="rounded-lg border border-border bg-muted/10 p-6">
+                          <MarkdownPreview markdown={note.rawText} />
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <>
                       {note.aiSummary ? (

@@ -9,7 +9,7 @@ export type ListedItemDto = {
   directory: string;
   createdDate: string;
   lastEditedDate: string;
-  noteSourceType?: 'recording' | 'generated_summary' | 'generated_practice_exam';
+  noteSourceType?: 'recording' | 'generated_summary' | 'generated_practice_exam' | 'slide_pdf';
 };
 
 export type NoteDto = {
@@ -22,8 +22,10 @@ export type NoteDto = {
   aiSummary: string | null;
   language: string;
   durationSeconds: number;
-  sourceType: 'recording' | 'generated_summary' | 'generated_practice_exam';
+  sourceType: 'recording' | 'generated_summary' | 'generated_practice_exam' | 'slide_pdf';
   generatedFromCount: number | null;
+  /** Present for slide PDF notes — path relative to API origin (use with auth fetch). */
+  pdfUrl?: string;
 };
 
 async function parseBody(res: Response): Promise<unknown> {
@@ -135,6 +137,58 @@ export async function createNote(body: {
 }): Promise<NoteDto> {
   const payload = (await apiPost('/notes', body)) as { note: NoteDto };
   return payload.note;
+}
+
+/** Multipart upload of a PDF slide deck into the given directory. */
+export async function uploadSlidePdf(directory: string, file: File, title?: string): Promise<NoteDto> {
+  const token = getToken();
+  const form = new FormData();
+  form.set('directory', directory);
+  form.set('file', file);
+  if (title?.trim()) form.set('title', title.trim());
+
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/notes/upload-pdf`, {
+    method: 'POST',
+    headers,
+    body: form,
+  });
+
+  const payload = await parseBody(res);
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    const errField =
+      typeof payload === 'object' && payload !== null && 'error' in payload
+        ? (payload as { error: unknown }).error
+        : undefined;
+    if (typeof errField === 'string') message = errField;
+    if (res.status === 401) {
+      clearSession();
+      window.location.assign('/');
+    }
+    throw new Error(message);
+  }
+
+  const body = payload as { note: NoteDto };
+  return body.note;
+}
+
+/** Authenticated fetch of the raw PDF bytes for a slide note (for iframe / blob URL). */
+export async function fetchNotePdfBlob(noteId: number): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/notes/${noteId}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      window.location.assign('/');
+    }
+    throw new Error(res.status === 404 ? 'PDF not found.' : `Could not load PDF (${res.status}).`);
+  }
+  return res.blob();
 }
 
 export async function getNote(noteId: number): Promise<NoteDto> {

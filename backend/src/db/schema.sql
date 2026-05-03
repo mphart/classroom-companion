@@ -26,8 +26,9 @@ CREATE TABLE IF NOT EXISTS notes (
   ai_summary MEDIUMTEXT NULL,
   language VARCHAR(80) NOT NULL DEFAULT 'English',
   duration_seconds INT UNSIGNED NOT NULL DEFAULT 0,
-  source_type ENUM('recording', 'generated_summary', 'generated_practice_exam') NOT NULL DEFAULT 'recording',
+  source_type ENUM('recording', 'generated_summary', 'generated_practice_exam', 'slide_pdf') NOT NULL DEFAULT 'recording',
   generated_from_count INT UNSIGNED NULL,
+  pdf_file_path VARCHAR(600) NULL DEFAULT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_notes_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE

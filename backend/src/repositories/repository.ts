@@ -11,6 +11,8 @@ export interface ListItemsParams {
 }
 
 export interface Repository {
+  /** Idempotent DB migrations for notes (MySQL only; no-op elsewhere). */
+  ensureNotesSchema(): Promise<void>;
   createUser(input: { name: string; username: string; passwordHash: string }): Promise<User>;
   findUserByUsername(username: string): Promise<User | null>;
   findUserById(id: number): Promise<AuthUser | null>;

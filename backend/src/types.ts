@@ -24,7 +24,7 @@ export interface Item {
   noteSourceType?: Note["sourceType"] | null;
 }
 
-export type NoteSourceType = "recording" | "generated_summary" | "generated_practice_exam";
+export type NoteSourceType = "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf";
 
 export interface Note {
   itemId: number;
@@ -34,6 +34,8 @@ export interface Note {
   durationSeconds: number;
   sourceType: NoteSourceType;
   generatedFromCount: number | null;
+  /** Relative path under the uploads root (MySQL); null for non-PDF notes. */
+  pdfFilePath: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,4 +57,5 @@ export interface CreateNoteInput {
   durationSeconds: number;
   sourceType?: NoteSourceType;
   generatedFromCount?: number | null;
+  pdfFilePath?: string | null;
 }

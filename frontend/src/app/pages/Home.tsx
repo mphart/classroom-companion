@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Navigate, useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { Calendar, ChevronLeft, ChevronRight, Clipboard, LayoutGrid, Pencil } from 'lucide-react';
 import logo from '@/assets/corner-logo.svg';
 import {
@@ -7,6 +10,7 @@ import {
   deleteItems,
   generatePracticeExam,
   listItems,
+  moveItem,
   renameItem,
   summarizeSelection,
   type ListedItemDto,
@@ -38,6 +42,120 @@ const MAX_ITEM_NAME_LENGTH = 120;
 /** Clipboard = list rows, grid = tiles, calendar = month grid by creation date. */
 type FileViewMode = 'list' | 'group' | 'calendar';
 
+const BROWSE_ITEM_DND_TYPE = 'browseItem' as const;
+
+type BrowseItemDragPayload = { itemId: number };
+
+function useBrowseItemDnD(
+  item: ListedItemDto,
+  loading: boolean,
+  onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>,
+) {
+  const [{ isDragging }, drag] = useDrag(
+    () => ({
+      type: BROWSE_ITEM_DND_TYPE,
+      item: (): BrowseItemDragPayload => ({ itemId: item.id }),
+      canDrag: !loading,
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    }),
+    [item.id, loading],
+  );
+
+  const [{ isOver, canDrop }, drop] = useDrop(
+    () => ({
+      accept: BROWSE_ITEM_DND_TYPE,
+      canDrop: (drag: BrowseItemDragPayload) => item.type === 'folder' && drag.itemId !== item.id,
+      drop: (drag: BrowseItemDragPayload) => {
+        if (item.type !== 'folder') return;
+        void onMoveToFolder(drag.itemId, item);
+      },
+      collect: (monitor) => ({
+        isOver: item.type === 'folder' && monitor.isOver({ shallow: true }),
+        canDrop: item.type === 'folder' && monitor.canDrop(),
+      }),
+    }),
+    [item, onMoveToFolder],
+  );
+
+  const attachRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      drag(el);
+      if (item.type === 'folder') {
+        drop(el);
+      }
+    },
+    [drag, drop, item.type],
+  );
+
+  return { attachRef, isDragging, isOver, canDrop };
+}
+
+/** Synthetic `..` entry: navigate to parent on click, drop items to move them to the parent directory. */
+function DotDotFolderRow({
+  layout,
+  loading,
+  onNavigateUp,
+  onDropItemHere,
+}: {
+  layout: 'list' | 'group' | 'calendar';
+  loading: boolean;
+  onNavigateUp: () => void;
+  onDropItemHere: (itemId: number) => Promise<void>;
+}) {
+  const [{ isOver, canDrop }, drop] = useDrop(
+    () => ({
+      accept: BROWSE_ITEM_DND_TYPE,
+      canDrop: () => !loading,
+      drop: (drag: BrowseItemDragPayload) => {
+        void onDropItemHere(drag.itemId);
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver({ shallow: true }),
+        canDrop: monitor.canDrop(),
+      }),
+    }),
+    [loading, onDropItemHere],
+  );
+
+  const compact = layout === 'calendar';
+
+  return (
+    <div
+      ref={drop}
+      role="button"
+      tabIndex={0}
+      onClick={onNavigateUp}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onNavigateUp();
+        }
+      }}
+      className={cn(
+        'cursor-pointer rounded-lg border border-dashed border-border bg-muted/30 transition-colors hover:bg-muted/50',
+        compact ? 'px-2 py-1.5' : 'p-4',
+        layout === 'list' && 'w-full',
+        layout === 'group' && 'col-span-4',
+        isOver && canDrop && 'border-solid ring-2 ring-[var(--brand)]',
+      )}
+    >
+      <div className={cn('flex items-center gap-2', compact && 'gap-1.5')}>
+        <span className={cn('shrink-0', compact ? 'text-base' : 'text-2xl')} aria-hidden>
+          📁
+        </span>
+        <div className="min-w-0">
+          <h3 className={cn('truncate font-medium', compact ? 'text-xs' : 'text-sm')}>..</h3>
+          {compact ? (
+            <p className="text-[0.65rem] leading-tight text-muted-foreground">Drop here to move up</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Open parent or drop items here to move them up one level</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
@@ -57,6 +175,7 @@ function BrowseItemCard({
   formatRelativeDate,
   onActivate,
   onRenameFolder,
+  onMoveToFolder,
 }: {
   item: ListedItemDto;
   layout: 'group' | 'list';
@@ -66,9 +185,13 @@ function BrowseItemCard({
   formatRelativeDate: (iso: string) => string;
   onActivate: (item: ListedItemDto) => void;
   onRenameFolder: (folder: ListedItemDto) => void;
+  onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>;
 }) {
+  const { attachRef, isDragging, isOver, canDrop } = useBrowseItemDnD(item, loading, onMoveToFolder);
+
   return (
     <div
+      ref={attachRef}
       role="button"
       tabIndex={0}
       onClick={() => onActivate(item)}
@@ -82,6 +205,8 @@ function BrowseItemCard({
         'cursor-pointer rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md',
         layout === 'list' && 'w-full',
         selected && 'ring-2',
+        isDragging && 'opacity-60',
+        item.type === 'folder' && isOver && canDrop && 'ring-2 ring-[var(--brand)]',
       )}
       style={selected ? ({ '--tw-ring-color': 'var(--brand)' } as CSSProperties) : undefined}
     >
@@ -129,6 +254,80 @@ function BrowseItemCard({
           <p className="text-xs text-muted-foreground">{formatRelativeDate(item.lastEditedDate)}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CalendarItemBar({
+  item,
+  selectionMode,
+  selected,
+  loading,
+  onActivate,
+  onRenameFolder,
+  onMoveToFolder,
+}: {
+  item: ListedItemDto;
+  selectionMode: boolean;
+  selected: boolean;
+  loading: boolean;
+  onActivate: (item: ListedItemDto) => void;
+  onRenameFolder: (folder: ListedItemDto) => void;
+  onMoveToFolder: (itemId: number, folder: ListedItemDto) => Promise<void>;
+}) {
+  const { attachRef, isDragging, isOver, canDrop } = useBrowseItemDnD(item, loading, onMoveToFolder);
+  const icon =
+    item.type === 'folder'
+      ? '📁'
+      : item.noteSourceType === 'generated_summary'
+        ? '🧠'
+        : item.noteSourceType === 'generated_practice_exam'
+          ? '📝'
+          : '📄';
+
+  return (
+    <div
+      ref={attachRef}
+      className={cn(
+        'flex min-w-0 items-center gap-0.5 rounded-md border border-border/80 bg-muted/30 px-1 py-0.5',
+        selectionMode && selected && 'ring-1 ring-[var(--brand)]',
+        isDragging && 'opacity-60',
+        item.type === 'folder' && isOver && canDrop && 'ring-1 ring-[var(--brand)]',
+      )}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left text-[0.7rem] leading-tight text-foreground"
+        onClick={() => onActivate(item)}
+      >
+        {selectionMode ? (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => {}}
+            className="pointer-events-none h-3 w-3 shrink-0"
+            aria-hidden
+          />
+        ) : null}
+        <span className="shrink-0">{icon}</span>
+        <span className="truncate">{item.name}</span>
+      </button>
+      {item.type === 'folder' ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+          disabled={loading}
+          aria-label={`Rename folder ${item.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRenameFolder(item);
+          }}
+        >
+          <Pencil className="size-3" aria-hidden />
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -199,6 +398,56 @@ export function Home() {
   useEffect(() => {
     void loadItems();
   }, [loadItems]);
+
+  const refreshDirectoryItems = useCallback(async () => {
+    if (!userRoot || !currentDirectory) return;
+    const fetched = await listItems({
+      directory: currentDirectory,
+      q: searchQuery.trim() || undefined,
+      ...sortApi,
+    });
+    setItems(fetched);
+    if (fileViewMode === 'calendar') {
+      const treeRows = await listItems({
+        directory: currentDirectory,
+        tree: true,
+        q: searchQuery.trim() || undefined,
+        sortBy: 'creationDate',
+        sortDir: 'desc',
+      });
+      setCalendarTreeItems(treeRows);
+    }
+  }, [userRoot, currentDirectory, searchQuery, sortApi, fileViewMode]);
+
+  const handleMoveToFolder = useCallback(
+    async (draggedItemId: number, folder: ListedItemDto) => {
+      if (!userRoot || !currentDirectory) return;
+      try {
+        await moveItem(draggedItemId, joinDirectory(folder.directory, folder.name));
+        await refreshDirectoryItems();
+        toast.success('Moved');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not move item');
+      }
+    },
+    [userRoot, currentDirectory, refreshDirectoryItems],
+  );
+
+  const handleMoveToParent = useCallback(
+    async (draggedItemId: number) => {
+      if (!userRoot || !currentDirectory) return;
+      const parent = parentDirectory(currentDirectory);
+      if (!parent || parent.length < userRoot.length) return;
+      try {
+        await moveItem(draggedItemId, parent);
+        await refreshDirectoryItems();
+        toast.success('Moved');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Could not move item');
+      }
+    },
+    [userRoot, currentDirectory, refreshDirectoryItems],
+  );
 
   useEffect(() => {
     if (fileViewMode !== 'calendar' || !userRoot || !currentDirectory) return;
@@ -482,7 +731,8 @@ export function Home() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <DndProvider backend={HTML5Backend}>
+      <div className="min-h-screen bg-background text-foreground">
       <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
@@ -836,6 +1086,17 @@ export function Home() {
                   Summaries
                 </label>
               </div>
+              {!atRoot ? (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-medium text-foreground">Parent</p>
+                  <DotDotFolderRow
+                    layout="calendar"
+                    loading={loading}
+                    onNavigateUp={goUpOneLevel}
+                    onDropItemHere={handleMoveToParent}
+                  />
+                </div>
+              ) : null}
               <p className="mt-4 text-xs text-muted-foreground">
                 Items use creation time and include everything under the current folder ({pathSegments.join(' / ') ||
                   'Home'}
@@ -915,59 +1176,18 @@ export function Home() {
                         {day}
                       </span>
                       <div className="flex max-h-28 min-h-0 flex-col gap-1 overflow-y-auto">
-                        {dayItems.map((item) => {
-                          const icon =
-                            item.type === 'folder'
-                              ? '📁'
-                              : item.noteSourceType === 'generated_summary'
-                                ? '🧠'
-                                : item.noteSourceType === 'generated_practice_exam'
-                                  ? '📝'
-                                  : '📄';
-                          return (
-                            <div
-                              key={item.id}
-                              className={cn(
-                                'flex min-w-0 items-center gap-0.5 rounded-md border border-border/80 bg-muted/30 px-1 py-0.5',
-                                selectionMode && selectedItems.has(item.id) && 'ring-1 ring-[var(--brand)]',
-                              )}
-                            >
-                              <button
-                                type="button"
-                                className="flex min-w-0 flex-1 items-center gap-1 text-left text-[0.7rem] leading-tight text-foreground"
-                                onClick={() => handleItemClick(item)}
-                              >
-                                {selectionMode ? (
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedItems.has(item.id)}
-                                    onChange={() => {}}
-                                    className="pointer-events-none h-3 w-3 shrink-0"
-                                    aria-hidden
-                                  />
-                                ) : null}
-                                <span className="shrink-0">{icon}</span>
-                                <span className="truncate">{item.name}</span>
-                              </button>
-                              {item.type === 'folder' ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-                                  disabled={loading}
-                                  aria-label={`Rename folder ${item.name}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openRenameFolderDialog(item);
-                                  }}
-                                >
-                                  <Pencil className="size-3" aria-hidden />
-                                </Button>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                        {dayItems.map((item) => (
+                          <CalendarItemBar
+                            key={item.id}
+                            item={item}
+                            selectionMode={selectionMode}
+                            selected={selectedItems.has(item.id)}
+                            loading={loading}
+                            onActivate={handleItemClick}
+                            onRenameFolder={openRenameFolderDialog}
+                            onMoveToFolder={handleMoveToFolder}
+                          />
+                        ))}
                       </div>
                     </div>
                   );
@@ -988,6 +1208,14 @@ export function Home() {
           </div>
         ) : fileViewMode === 'list' ? (
           <div className="flex flex-col gap-2">
+            {!atRoot ? (
+              <DotDotFolderRow
+                layout="list"
+                loading={loading}
+                onNavigateUp={goUpOneLevel}
+                onDropItemHere={handleMoveToParent}
+              />
+            ) : null}
             {items.map((item) => (
               <BrowseItemCard
                 key={item.id}
@@ -999,6 +1227,7 @@ export function Home() {
                 formatRelativeDate={formatRelativeDate}
                 onActivate={handleItemClick}
                 onRenameFolder={openRenameFolderDialog}
+                onMoveToFolder={handleMoveToFolder}
               />
             ))}
             {!loading && items.length === 0 ? (
@@ -1009,6 +1238,14 @@ export function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-4">
+            {!atRoot ? (
+              <DotDotFolderRow
+                layout="group"
+                loading={loading}
+                onNavigateUp={goUpOneLevel}
+                onDropItemHere={handleMoveToParent}
+              />
+            ) : null}
             {items.map((item) => (
               <BrowseItemCard
                 key={item.id}
@@ -1020,6 +1257,7 @@ export function Home() {
                 formatRelativeDate={formatRelativeDate}
                 onActivate={handleItemClick}
                 onRenameFolder={openRenameFolderDialog}
+                onMoveToFolder={handleMoveToFolder}
               />
             ))}
             {!loading && items.length === 0 ? (
@@ -1081,6 +1319,7 @@ export function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </DndProvider>
   );
 }

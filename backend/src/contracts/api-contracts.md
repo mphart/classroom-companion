@@ -24,9 +24,16 @@ All protected routes require `Authorization: Bearer <jwt>`.
 - `POST /folders`
   - Request: `{ "name": "Physics", "directory": "userId/" }`
   - Response `201`: `{ "item": { "id": 3, "type": "folder", "name": "Physics", "directory": "userId/", "createdDate": "...", "lastEditedDate": "..." } }`
+  - Response `400`: cannot create a folder whose parent path is already at the **innermost** allowed level (`userId/A/B/` — at most two folder names under the user root; the inner folder cannot contain subfolders).
 - `PATCH /items/:itemId/rename`
   - Request: `{ "newName": "Chapter 3" }`
   - Response `200`: `{ "item": { ... } }`
+- `PATCH /items/:itemId/move`
+  - Request: `{ "targetDirectory": "userId/physics/" }` — parent directory for the item after the move (same trailing-slash convention as listing).
+  - Response `200`: `{ "item": { ... } }`
+  - Response `404`: item not found.
+  - Response `409`: an item with the same name already exists in `targetDirectory`.
+  - Response `400`: invalid target, moving a folder into itself or a descendant, or move would exceed the **two-level** folder hierarchy (folders cannot live inside the innermost folder; moving a tree would create a third folder level).
 - `DELETE /items`
   - Request: `{ "itemIds": [3, 12, 19] }`
   - Response `200`: `{ "deletedCount": 3 }`

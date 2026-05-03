@@ -1,3 +1,6 @@
+import { HttpClientError } from "../lib/errors";
+import { isDirectoryUnderUserRoot, isFolderCreationBlockedInDirectory } from "../lib/itemPathDepth";
+import { validateMoveItemContext } from "../lib/validateItemMove";
 import type { CreateNoteInput, Item, Note, User } from "../types";
 import type { ListItemsParams, Repository } from "./repository";
 
@@ -68,17 +71,52 @@ export class InMemoryRepository implements Repository {
   }
 
   async createFolder(input: { userId: number; name: string; directoryPath: string }): Promise<Item> {
+    const dir = normalizePath(input.directoryPath);
+    if (!isDirectoryUnderUserRoot(dir, input.userId)) {
+      throw new HttpClientError("Invalid directory for folder.", 400);
+    }
+    if (isFolderCreationBlockedInDirectory(dir, input.userId)) {
+      throw new HttpClientError("Cannot create a folder inside the innermost folder.", 400);
+    }
     const now = new Date();
     const item: Item = {
       id: this.itemIdSeq++,
       userId: input.userId,
       type: "folder",
       name: input.name,
-      directoryPath: normalizePath(input.directoryPath),
+      directoryPath: dir,
       createdAt: now,
       updatedAt: now,
     };
     this.items.push(item);
+    return item;
+  }
+
+  async moveItem(input: { userId: number; itemId: number; targetDirectoryPath: string }): Promise<Item | null> {
+    const item = this.items.find((i) => i.id === input.itemId && i.userId === input.userId);
+    if (!item) return null;
+    const allItems = this.items.filter((i) => i.userId === input.userId);
+    const decision = validateMoveItemContext(input.userId, item, input.targetDirectoryPath, allItems);
+    if (decision.kind === "noop") return item;
+
+    const now = new Date();
+    if (decision.kind === "note") {
+      item.directoryPath = decision.target;
+      item.updatedAt = now;
+      return item;
+    }
+
+    const { oldPrefix, newPrefix, target } = decision;
+    for (const candidate of this.items) {
+      if (candidate.userId !== input.userId || candidate.id === item.id) continue;
+      const d = normalizePath(candidate.directoryPath);
+      if (d.startsWith(oldPrefix)) {
+        candidate.directoryPath = newPrefix + d.slice(oldPrefix.length);
+        candidate.updatedAt = now;
+      }
+    }
+    item.directoryPath = target;
+    item.updatedAt = now;
     return item;
   }
 

@@ -1,4 +1,7 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
+import { HttpClientError } from "../lib/errors";
+import { isDirectoryUnderUserRoot, isFolderCreationBlockedInDirectory } from "../lib/itemPathDepth";
+import { validateMoveItemContext } from "../lib/validateItemMove";
 import type { AuthUser, CreateNoteInput, Item, Note, SortBy, SortDir, User } from "../types";
 import type { ListItemsParams, Repository } from "./repository";
 
@@ -166,13 +169,70 @@ export class MySqlRepository implements Repository {
   }
 
   async createFolder(input: { userId: number; name: string; directoryPath: string }): Promise<Item> {
+    const dir = normalizePath(input.directoryPath);
+    if (!isDirectoryUnderUserRoot(dir, input.userId)) {
+      throw new HttpClientError("Invalid directory for folder.", 400);
+    }
+    if (isFolderCreationBlockedInDirectory(dir, input.userId)) {
+      throw new HttpClientError("Cannot create a folder inside the innermost folder.", 400);
+    }
     const [result] = await this.pool.execute(
       "INSERT INTO items (user_id, type, name, directory_path) VALUES (?, 'folder', ?, ?)",
-      [input.userId, input.name, normalizePath(input.directoryPath)],
+      [input.userId, input.name, dir],
     );
     const id = (result as { insertId: number }).insertId;
     const [rows] = await this.pool.execute<ItemRow[]>("SELECT * FROM items WHERE id = ?", [id]);
     return this.mapItem(rows[0]);
+  }
+
+  async moveItem(input: { userId: number; itemId: number; targetDirectoryPath: string }): Promise<Item | null> {
+    const [targetRows] = await this.pool.execute<ItemRow[]>(
+      "SELECT * FROM items WHERE id = ? AND user_id = ? LIMIT 1",
+      [input.itemId, input.userId],
+    );
+    if (targetRows.length === 0) return null;
+    const row = targetRows[0];
+    const item = this.mapItem(row);
+
+    const [allRows] = await this.pool.execute<ItemRow[]>("SELECT * FROM items WHERE user_id = ?", [input.userId]);
+    const allItems = allRows.map((r) => this.mapItem(r));
+
+    const decision = validateMoveItemContext(input.userId, item, input.targetDirectoryPath, allItems);
+    if (decision.kind === "noop") return item;
+
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      if (decision.kind === "note") {
+        await connection.execute(
+          "UPDATE items SET directory_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+          [decision.target, input.itemId, input.userId],
+        );
+      } else {
+        const { oldPrefix, newPrefix, target } = decision;
+        await connection.execute(
+          `UPDATE items SET
+            directory_path = CONCAT(?, SUBSTRING(directory_path, CHAR_LENGTH(?) + 1)),
+            updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = ? AND id != ? AND directory_path LIKE CONCAT(?, '%')`,
+          [newPrefix, oldPrefix, input.userId, input.itemId, oldPrefix],
+        );
+        await connection.execute(
+          "UPDATE items SET directory_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+          [target, input.itemId, input.userId],
+        );
+      }
+      await connection.commit();
+    } catch (e) {
+      await connection.rollback();
+      throw e;
+    } finally {
+      connection.release();
+    }
+
+    const [after] = await this.pool.execute<ItemRow[]>("SELECT * FROM items WHERE id = ?", [input.itemId]);
+    if (after.length === 0) return null;
+    return this.mapItem(after[0]);
   }
 
   async renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null> {

@@ -16,6 +16,7 @@ export interface Repository {
   findUserById(id: number): Promise<AuthUser | null>;
   listItems(params: ListItemsParams): Promise<Item[]>;
   createFolder(input: { userId: number; name: string; directoryPath: string }): Promise<Item>;
+  moveItem(input: { userId: number; itemId: number; targetDirectoryPath: string }): Promise<Item | null>;
   renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null>;
   deleteItems(input: { userId: number; itemIds: number[] }): Promise<number>;
   createNote(input: CreateNoteInput): Promise<{ item: Item; note: Note }>;

@@ -21,6 +21,10 @@ const bulkDeleteSchema = z.object({
   itemIds: z.array(z.number().int().positive()).min(1),
 });
 
+const moveItemSchema = z.object({
+  targetDirectory: z.string().trim().min(1).max(500),
+});
+
 const toItemResponse = (item: Item) => ({
   id: item.id,
   type: item.type,
@@ -59,6 +63,22 @@ export const createItemRoutes = (repo: Repository): Router => {
       const itemId = z.coerce.number().int().positive().parse(req.params.itemId);
       const body = renameSchema.parse(req.body);
       const item = await repo.renameItem({ userId: req.authUserId!, itemId, newName: body.newName });
+      if (!item) return res.status(404).json({ error: "Item not found." });
+      return res.json({ item: toItemResponse(item) });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.patch("/:itemId/move", async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const itemId = z.coerce.number().int().positive().parse(req.params.itemId);
+      const body = moveItemSchema.parse(req.body);
+      const item = await repo.moveItem({
+        userId: req.authUserId!,
+        itemId,
+        targetDirectoryPath: body.targetDirectory,
+      });
       if (!item) return res.status(404).json({ error: "Item not found." });
       return res.json({ item: toItemResponse(item) });
     } catch (error) {

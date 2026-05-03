@@ -5,6 +5,7 @@ export type JargonTerm = { term: string; definition: string };
 
 function getGeminiKey(): string | undefined {
   return (
+    process.env.GLOSSARY_API_KEY?.trim() ||
     process.env.GEMINI_API_KEY?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     undefined
@@ -112,7 +113,7 @@ export async function extractJargonTerms(input: {
   if (!apiKey || useTestFallback) {
     if (!useTestFallback) {
       throw new SummarizerError(
-        "AI is not configured. Set GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env.",
+        "AI is not configured. Set GLOSSARY_API_KEY (or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env.",
         503,
       );
     }

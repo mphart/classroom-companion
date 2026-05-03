@@ -377,6 +377,7 @@ export async function parseYoutubePipeline(opts: {
     try {
       summaryMarkdown = await summarizeSourceTexts([transcriptText], {
         outputLanguage: opts.outputLanguage,
+        apiKey: process.env.VIDEO?.trim() || undefined,
       });
     } catch (e) {
       if (isGeminiSummarizeRateLimited(e)) {

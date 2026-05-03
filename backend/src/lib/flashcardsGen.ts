@@ -17,6 +17,7 @@ export type FlashcardsDocument = z.infer<typeof flashcardsDocumentSchema>;
 
 function getGeminiKey(): string | undefined {
   return (
+    process.env.FLASHCARD_GENERATOR?.trim() ||
     process.env.GEMINI_API_KEY?.trim() ||
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     undefined
@@ -57,7 +58,7 @@ async function generateJsonWithGemini(prompt: string): Promise<unknown> {
   const apiKey = getGeminiKey();
   if (!apiKey) {
     throw new SummarizerError(
-      "Flashcards AI is not configured. Set GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env or root .env.",
+      "Flashcards AI is not configured. Set FLASHCARD_GENERATOR (or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY) in backend/.env or root .env.",
       503,
     );
   }

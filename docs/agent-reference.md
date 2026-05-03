@@ -31,6 +31,8 @@ Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pag
 ## Backend entrypoints
 
 - **HTTP:** `createApp()` in `backend/src/app.ts` — `/auth`, `/items`, `/folders`, `/notes`, `/ai`, `/health`.
+- **Item move (reparent):** `PATCH /items/:itemId/move` with body `{ "targetDirectory": "<parent path trailing slash>" }` — implemented in `Repository.moveItem` (`mysqlRepository`, `inMemoryRepository`). Validates name collisions (`409`), folder-into-self/descendant (`400`), and **folder depth** (see below). Errors that should return 4xx use `HttpClientError` in `backend/src/lib/errors.ts` (handled in `backend/src/middleware/error.ts`).
+- **Folder depth (strict MVP):** At most **two** folder-name segments under the user root (e.g. `userId/A/` and `userId/A/B/`). The inner folder (`B`) **must not** contain subfolders (notes allowed). Helpers: `backend/src/lib/itemPathDepth.ts`; move validation: `backend/src/lib/validateItemMove.ts`. **`POST /folders`** rejects creating a folder when the parent directory is already at the innermost level.
 - **Process:** `backend/src/server.ts` — `http.createServer(app)` + **WebSocket** attachment for realtime STT (same listen port as HTTP).
 - **Transcription:** `backend/src/transcription/registerTranscriptionWss.ts` — path **`/transcription/stream`**, query **`?token=<JWT>`** (verify with same secret as REST). Forwards **binary PCM** upstream: **Deepgram** when `configure.language` is **`en`**, otherwise **Gladia** (`POST https://api.gladia.io/v2/live` then WebSocket URL) with realtime **translation** into the target language. Sends **JSON text** frames to the client (`partial`, `final`, `error`). Helpers: `backend/src/lib/deepgramLive.ts`, `backend/src/lib/gladiaLive.ts`.
 - **Deepgram helpers:** `backend/src/lib/deepgramLive.ts` — listen URL (`linear16`, mono, 16 kHz), message normalization.
@@ -92,9 +94,17 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 ---
 
+## Frontend — Home file browser (items / folders)
+
+- **Page:** `frontend/src/app/pages/Home.tsx` — lists items for `currentDirectory`, selection mode, summaries/exams, list / grid / calendar layouts (motion + ambient background from `main` UI pass).
+- **Drag-and-drop:** `react-dnd` + `react-dnd-html5-backend`. The page root is wrapped in **`DndProvider`**. Items use **`useDrag`**; **folder** rows (and the synthetic **`..` / `DotDotFolderRow`**) use **`useDrop`** to call `moveItem` from `frontend/src/app/lib/api.ts`, then refresh the listing (and calendar tree when in calendar mode). **`sonner`** toasts for success/errors; **`Toaster`** is mounted in `frontend/src/app/App.tsx` next to **`RouterProvider`** and **`ThemeToggle`**.
+- **Parent row (`..`):** When **not** at the user root directory, a **`DotDotFolderRow`** appears (list + grid first row; calendar sidebar). Click navigates up (same as Back); drop moves the dragged item to **`parentDirectory(currentDirectory)`** via the same move API.
+
+---
+
 ## Testing
 
-- **Backend:** `cd backend && npm test` (Vitest). Includes mocked Deepgram proxy tests; does not call real Deepgram/Gemini in CI unless configured.
+- **Backend:** `cd backend && npm test` (Vitest). Includes mocked Deepgram proxy tests; does not call real Deepgram/Gemini in CI unless configured. **`src/tests/app.test.ts`** covers item **move**, folder-depth limits, and **`POST /folders`** depth guard (in-memory app).
 - **Typecheck:** `cd backend && npm run typecheck`
 - **Frontend build:** `cd frontend && npm run build`
 
@@ -103,6 +113,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 ## Git / integration notes (historical)
 
 - **`main`** merged **`ai-and-deepgram-integration`**: combined **Gemini** env vars with **Deepgram** in `docker-compose.yml` and `backend/README.md`. **`ActiveRecording`** kept the **Deepgram realtime** pipeline from the feature branch to avoid conflicting dual transcript UIs.
+- **`main`** merged **`drag-and-drop`**: item **move** API + strict **two-level** folder tree; Home **DnD** and **`..`** parent row. Merge conflicts in **`App.tsx`** / **`Home.tsx`** were resolved by keeping **`main`’s** motion/ambient/profile UI and wrapping Home in **`DndProvider`**, preserving **`ThemeToggle`** + **`Toaster`** alongside **`RouterProvider`**.
 - **JWT in WebSocket query** is an MVP tradeoff; production may prefer short-lived STT tickets or post-connect auth.
 
 ---
@@ -111,6 +122,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 | Symptom | Likely cause |
 | --- | --- |
+| Move / create folder returns **400** about nesting | Path would exceed **two** folder levels under `userId/`, or a folder would be placed inside the innermost folder — by design (`itemPathDepth` / `validateItemMove`). |
 | WebSocket fails to `ws://localhost:4000` while using Docker UI on **8080** | Browser must use **same host:port as the page** (or set `VITE_API_URL` / `VITE_WS_URL` correctly); ensure Nginx proxies `/transcription/stream`. |
 | `api` has no `DEEPGRAM_API_KEY` / `GLADIO_API_KEY` in Docker | Add to **root** `.env` and ensure compose passes keys into **`api.environment`**. English recordings need Deepgram; other languages need Gladia (`GLADIO_API_KEY`). |
 | Nginx won’t start | Invalid directive — check for `/*` comments; use `#` only. |
@@ -122,6 +134,9 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 
 | Path | Contents |
 | --- | --- |
+| `backend/src/lib/itemPathDepth.ts` | User-root folder path depth helpers |
+| `backend/src/lib/validateItemMove.ts` | Move target validation (depth, cycle, collision) |
+| `backend/src/routes/itemRoutes.ts` | Items list, rename, **move**, bulk delete |
 | `backend/src/contracts/api-contracts.md` | REST + WS transcript contract |
 | `backend/README.md` | Local run, env, milestones |
 | `docker-compose.yml` | Services and injected env |

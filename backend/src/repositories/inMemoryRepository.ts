@@ -12,6 +12,10 @@ const normalizePath = (value: string): string => {
 };
 
 export class InMemoryRepository implements Repository {
+  async ensureNotesSchema(): Promise<void> {
+    return;
+  }
+
   private users: User[] = [];
   private items: Item[] = [];
   private notes: Note[] = [];
@@ -184,6 +188,7 @@ export class InMemoryRepository implements Repository {
       durationSeconds: input.durationSeconds,
       sourceType: input.sourceType ?? "recording",
       generatedFromCount: input.generatedFromCount ?? null,
+      pdfFilePath: input.pdfFilePath ?? null,
       createdAt: now,
       updatedAt: now,
     };

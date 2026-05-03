@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+} from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Navigate, useNavigate } from 'react-router';
@@ -24,6 +32,7 @@ import {
   moveItem,
   renameItem,
   summarizeSelection,
+  uploadSlidePdf,
   type ListedItemDto,
 } from '@/app/lib/api';
 import { Button } from '@/app/components/ui/button';
@@ -241,7 +250,9 @@ function BrowseItemCard({
                     ? '🧠'
                     : item.noteSourceType === 'generated_practice_exam'
                       ? '📝'
-                      : '📄'}
+                      : item.noteSourceType === 'slide_pdf'
+                        ? '📑'
+                        : '📄'}
               </span>
               <h3 className="truncate text-sm">{item.name}</h3>
             </div>
@@ -295,7 +306,9 @@ function CalendarItemBar({
         ? '🧠'
         : item.noteSourceType === 'generated_practice_exam'
           ? '📝'
-          : '📄';
+          : item.noteSourceType === 'slide_pdf'
+            ? '📑'
+            : '📄';
 
   return (
     <div
@@ -379,6 +392,7 @@ export function Home() {
   const [showCalendarFolders, setShowCalendarFolders] = useState(true);
   const [showCalendarNotes, setShowCalendarNotes] = useState(true);
   const [showCalendarSummaries, setShowCalendarSummaries] = useState(true);
+  const pdfFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setCurrentDirectory(userRoot);
@@ -541,6 +555,30 @@ export function Home() {
     if (!userRoot || !currentDirectory || atRoot) return;
     const parent = parentDirectory(currentDirectory);
     setCurrentDirectory(parent && parent.length >= userRoot.length ? parent : userRoot);
+  };
+
+  const handlePdfFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !userRoot || !currentDirectory) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      toast.error('Please choose a PDF file.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const note = await uploadSlidePdf(currentDirectory, file);
+      setShowNewMenu(false);
+      await loadItems();
+      toast.success('Slides uploaded');
+      navigate({ pathname: '/viewer', search: `?noteId=${String(note.id)}` }, { state: { noteId: note.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleNewFolder = async () => {
@@ -807,6 +845,17 @@ export function Home() {
                       Start New Recording
                     </button>
                     <button
+                      type="button"
+                      onClick={() => {
+                        pdfFileInputRef.current?.click();
+                        setShowNewMenu(false);
+                      }}
+                      disabled={loading}
+                      className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+                    >
+                      Upload PDF slides
+                    </button>
+                    <button
                       onClick={() => void handleNewFolder()}
                       className="w-full text-left px-4 py-2 hover:bg-accent hover:text-accent-foreground"
                     >
@@ -814,6 +863,14 @@ export function Home() {
                     </button>
                   </div>
                 )}
+                <input
+                  ref={pdfFileInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  aria-hidden
+                  onChange={(e) => void handlePdfFileSelected(e)}
+                />
               </div>
             </div>
 

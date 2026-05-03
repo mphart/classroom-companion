@@ -8,7 +8,7 @@ const port = Number(process.env.PORT ?? 4000);
 
 async function start() {
   const repo = MySqlRepository.fromEnv();
-  await repo.ensureGeneratedPracticeExamEnum();
+  await repo.ensureNotesSchema();
 
   const app = createApp(repo);
   const server = http.createServer(app);

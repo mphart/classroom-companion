@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
+    volumes:
+      - pdf_uploads:/data/uploads/pdfs
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4000/health"]
       interval: 5s
@@ -45,6 +47,7 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash-lite}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
       GLADIO_API_KEY: ${GLADIO_API_KEY:-}
+      PDF_UPLOAD_DIR: /data/uploads/pdfs
     depends_on:
       db:
         condition: service_healthy
@@ -61,3 +64,4 @@ services:
 
 volumes:
   mysql_data:
+  pdf_uploads:

@@ -1,4 +1,7 @@
 import { createPool, type Pool, type RowDataPacket } from "mysql2/promise";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { getPdfUploadRoot } from "../lib/uploadPaths";
 import { HttpClientError } from "../lib/errors";
 import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { isDirectoryUnderUserRoot, isFolderCreationBlockedInDirectory } from "../lib/itemPathDepth";
@@ -16,7 +19,7 @@ type ItemRow = RowDataPacket & {
   directory_path: string;
   created_at: Date;
   updated_at: Date;
-  note_source_type?: "recording" | "generated_summary" | "generated_practice_exam" | null;
+  note_source_type?: "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf" | null;
 };
 
 type NoteRow = RowDataPacket & {
@@ -25,8 +28,9 @@ type NoteRow = RowDataPacket & {
   ai_summary: string | null;
   language: string;
   duration_seconds: number;
-  source_type: "recording" | "generated_summary" | "generated_practice_exam";
+  source_type: "recording" | "generated_summary" | "generated_practice_exam" | "slide_pdf";
   generated_from_count: number | null;
+  pdf_file_path: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -35,21 +39,43 @@ export class MySqlRepository implements Repository {
   constructor(private readonly pool: Pool) {}
 
   /**
-   * Extends `notes.source_type` when the DB was created before `generated_practice_exam` existed.
-   * Safe to call on every startup (no-op if already migrated).
+   * Applies incremental MySQL changes for `notes` (new `source_type` enum values, `pdf_file_path`).
+   * Safe to call on every startup.
    */
-  async ensureGeneratedPracticeExamEnum(): Promise<void> {
-    const [rows] = await this.pool.execute<RowDataPacket[]>(
+  async ensureNotesSchema(): Promise<void> {
+    const [typeRows] = await this.pool.execute<RowDataPacket[]>(
       `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notes' AND COLUMN_NAME = 'source_type'
        LIMIT 1`,
     );
-    if (rows.length === 0) return;
-    const col = rows[0]?.COLUMN_TYPE;
-    if (typeof col === "string" && col.includes("generated_practice_exam")) return;
-    await this.pool.execute(
-      `ALTER TABLE notes MODIFY COLUMN source_type ENUM('recording', 'generated_summary', 'generated_practice_exam') NOT NULL DEFAULT 'recording'`,
+    if (typeRows.length > 0) {
+      const col = typeRows[0]?.COLUMN_TYPE;
+      const needsUpdate =
+        typeof col !== "string" ||
+        !col.includes("generated_practice_exam") ||
+        !col.includes("slide_pdf");
+      if (needsUpdate) {
+        await this.pool.execute(
+          `ALTER TABLE notes MODIFY COLUMN source_type ENUM(
+            'recording',
+            'generated_summary',
+            'generated_practice_exam',
+            'slide_pdf'
+          ) NOT NULL DEFAULT 'recording'`,
+        );
+      }
+    }
+
+    const [pdfCols] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'notes' AND COLUMN_NAME = 'pdf_file_path'
+       LIMIT 1`,
     );
+    if (pdfCols.length === 0) {
+      await this.pool.execute(
+        `ALTER TABLE notes ADD COLUMN pdf_file_path VARCHAR(600) NULL DEFAULT NULL AFTER generated_from_count`,
+      );
+    }
   }
 
   static fromEnv(): MySqlRepository {
@@ -97,6 +123,7 @@ export class MySqlRepository implements Repository {
       durationSeconds: row.duration_seconds,
       sourceType: row.source_type,
       generatedFromCount: row.generated_from_count,
+      pdfFilePath: row.pdf_file_path ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -288,6 +315,26 @@ export class MySqlRepository implements Repository {
     if (idsToDelete.size === 0) return 0;
     const idList = [...idsToDelete];
     const deleteMarks = idList.map(() => "?").join(",");
+
+    const [pdfRows] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT n.pdf_file_path FROM notes n
+       INNER JOIN items i ON i.id = n.item_id
+       WHERE i.user_id = ? AND i.id IN (${deleteMarks}) AND n.pdf_file_path IS NOT NULL`,
+      [input.userId, ...idList],
+    );
+    const uploadRoot = getPdfUploadRoot();
+    for (const row of pdfRows) {
+      const rel = typeof row.pdf_file_path === "string" ? row.pdf_file_path : "";
+      if (!rel || rel.includes("..") || path.isAbsolute(rel)) continue;
+      const full = path.join(uploadRoot, rel);
+      if (!full.startsWith(path.resolve(uploadRoot))) continue;
+      try {
+        await fs.unlink(full);
+      } catch {
+        /* missing file is fine */
+      }
+    }
+
     await this.pool.execute(`DELETE FROM items WHERE user_id = ? AND id IN (${deleteMarks})`, [input.userId, ...idList]);
     return idsToDelete.size;
   }
@@ -302,7 +349,8 @@ export class MySqlRepository implements Repository {
       );
       const itemId = (itemResult as { insertId: number }).insertId;
       await connection.execute(
-        "INSERT INTO notes (item_id, raw_text, ai_summary, language, duration_seconds, source_type, generated_from_count) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        `INSERT INTO notes (item_id, raw_text, ai_summary, language, duration_seconds, source_type, generated_from_count, pdf_file_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           itemId,
           input.rawText,
@@ -311,6 +359,7 @@ export class MySqlRepository implements Repository {
           input.durationSeconds,
           input.sourceType ?? "recording",
           input.generatedFromCount ?? null,
+          input.pdfFilePath ?? null,
         ],
       );
       await connection.commit();
@@ -328,7 +377,7 @@ export class MySqlRepository implements Repository {
   async getNoteById(input: { userId: number; itemId: number }): Promise<{ item: Item; note: Note } | null> {
     const [rows] = await this.pool.execute<(ItemRow & NoteRow)[]>(
       `SELECT i.id, i.user_id, i.type, i.name, i.directory_path, i.created_at, i.updated_at,
-              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.created_at, n.updated_at
+              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.created_at, n.updated_at
        FROM items i
        INNER JOIN notes n ON n.item_id = i.id
        WHERE i.user_id = ? AND i.id = ? AND i.type = 'note'
@@ -342,7 +391,7 @@ export class MySqlRepository implements Repository {
   async listNotes(input: { userId: number; directoryPath?: string }): Promise<Array<{ item: Item; note: Note }>> {
     const [rows] = await this.pool.execute<(ItemRow & NoteRow)[]>(
       `SELECT i.id, i.user_id, i.type, i.name, i.directory_path, i.created_at, i.updated_at,
-              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.created_at, n.updated_at
+              n.item_id, n.raw_text, n.ai_summary, n.language, n.duration_seconds, n.source_type, n.generated_from_count, n.pdf_file_path, n.created_at, n.updated_at
        FROM items i
        INNER JOIN notes n ON n.item_id = i.id
        WHERE i.user_id = ? AND i.type = 'note' AND (? IS NULL OR i.directory_path = ?)

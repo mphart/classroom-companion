@@ -1756,22 +1756,49 @@ export function Home() {
             if (!calendarSyncing) setCalendarSyncDialogOpen(open);
           }}
         >
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Sync this month to calendar</DialogTitle>
+              <DialogTitle>Export calendar to Apple or Google</DialogTitle>
               <DialogDescription>
-                Export visible events for {calMonthTitle} as an ICS file for Apple Calendar or Google Calendar.
+                Download an ICS file for <span className="font-medium text-foreground">{calMonthTitle}</span> and import it
+                into your calendar app.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-2 py-1">
-              <p className="text-xs text-muted-foreground">
-                Export includes items currently shown by your calendar filters plus important dates.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {calendarExportEvents.length} event{calendarExportEvents.length === 1 ? '' : 's'} ready to export.
-              </p>
+            <div className="space-y-3 py-1">
+              <div className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                Export includes events currently visible by your filters, plus important dates.
+                <span className="ml-1 font-medium text-foreground">
+                  {calendarExportEvents.length} event{calendarExportEvents.length === 1 ? '' : 's'} ready.
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={calendarSyncing || calendarExportEvents.length === 0}
+                  onClick={() => void handleExportCalendarIcs('apple')}
+                  className="rounded-xl border border-border bg-card px-3 py-3 text-left transition-colors hover:border-[var(--brand)]/50 hover:bg-[var(--brand-soft-bg)] disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <p className="text-sm font-semibold text-foreground">Apple Calendar</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Download `.ics`, then open it in Calendar.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  disabled={calendarSyncing || calendarExportEvents.length === 0}
+                  onClick={() => void handleExportCalendarIcs('google')}
+                  className="rounded-xl border border-[var(--brand-soft-border)] bg-[var(--brand-soft-bg)] px-3 py-3 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--brand-soft-bg)_70%,white)] disabled:cursor-not-allowed disabled:opacity-55 dark:hover:bg-[color-mix(in_srgb,var(--brand-soft-bg)_80%,black)]"
+                >
+                  <p className="text-sm font-semibold text-[var(--brand-deep)] dark:text-[var(--brand)]">
+                    Google Calendar
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Download `.ics`, then use Google Calendar import.
+                  </p>
+                </button>
+              </div>
             </div>
-            <DialogFooter className="gap-2 sm:justify-center">
+            <DialogFooter className="gap-2 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -1780,23 +1807,7 @@ export function Home() {
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={calendarSyncing || calendarExportEvents.length === 0}
-                onClick={() => void handleExportCalendarIcs('apple')}
-              >
-                {calendarSyncing ? 'Exporting…' : 'Export for Apple Calendar'}
-              </Button>
-              <Button
-                type="button"
-                disabled={calendarSyncing || calendarExportEvents.length === 0}
-                onClick={() => void handleExportCalendarIcs('google')}
-                className="text-white"
-                style={{ backgroundColor: 'var(--brand)' }}
-              >
-                {calendarSyncing ? 'Exporting…' : 'Export for Google Calendar'}
-              </Button>
+              {calendarSyncing ? <span className="text-xs text-muted-foreground">Exporting…</span> : null}
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -2144,7 +2155,7 @@ export function Home() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="mt-3 w-full justify-center gap-1.5"
+                className="mt-3 w-full justify-center gap-1.5 border-[var(--brand-soft-border)] bg-[var(--brand-soft-bg)] text-[var(--brand-deep)] hover:bg-[color-mix(in_srgb,var(--brand-soft-bg)_70%,white)] dark:text-[var(--brand)] dark:hover:bg-[color-mix(in_srgb,var(--brand-soft-bg)_80%,black)]"
                 disabled={calendarLoading}
                 onClick={() => setCalendarSyncDialogOpen(true)}
               >

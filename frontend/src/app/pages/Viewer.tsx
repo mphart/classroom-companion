@@ -65,7 +65,7 @@ export function Viewer() {
     };
   }, [noteId]);
 
-  const handleGeminiSummarize = async () => {
+  const handleAiSummarize = async () => {
     if (noteId === undefined) return;
     const body = note?.rawText?.trim() ?? '';
     if (!body) return;
@@ -91,12 +91,12 @@ export function Viewer() {
 
   const subtitle =
     note && note.sourceType === 'generated_summary' && typeof note.generatedFromCount === 'number'
-      ? `Gemini-generated • merged from ${note.generatedFromCount} source note(s)`
+      ? `AI summary • merged from ${note.generatedFromCount} source note(s)`
       : note && note.sourceType === 'generated_practice_exam' && typeof note.generatedFromCount === 'number'
         ? `Practice exam • from ${note.generatedFromCount} source note(s)`
         : note
           ? note.sourceType === 'generated_summary'
-            ? 'Gemini-generated summary note'
+            ? 'AI-generated summary note'
             : note.sourceType === 'generated_practice_exam'
               ? 'Generated practice exam'
               : 'Saved lecture note'
@@ -195,13 +195,13 @@ export function Viewer() {
                 title={
                   !note?.rawText?.trim()
                     ? 'Add transcript text to this note before summarizing.'
-                    : 'Generate an AI summary with Gemini'
+                    : 'Generate an AI summary from this lecture'
                 }
-                onClick={() => void handleGeminiSummarize()}
+                onClick={() => void handleAiSummarize()}
                 className="rounded-lg px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand)' }}
               >
-                {summarizing ? 'Generating…' : 'Summarize with Gemini'}
+                {summarizing ? 'Generating…' : 'Generate AI summary'}
               </button>
             ) : null}
             {note?.sourceType === 'generated_practice_exam' && noteId !== undefined ? (

@@ -41,7 +41,12 @@ Apply `src/db/schema.sql` against MySQL before using the real repository.
 ## Incremental Delivery Milestones
 
 1. **Auth foundation**: `/auth/signup`, `/auth/login`, `/auth/logout`, `/auth/me`.
-2. **Home browsing**: `/items`, `/folders`, rename + bulk delete.
+2. **Home browsing**: `/items`, `/folders`, rename, move, bulk delete; tree listing for calendar.
 3. **Recording output**: create and fetch notes with read-only viewer payload.
-4. **AI flows**: summarize single note and multi-selection into generated summary note.
-5. **Hardening**: validation, per-user access control, integration tests.
+4. **AI summaries**: `/ai/summarize/note/:id`, `/ai/summarize/selection` — recording-based output language inference (English default).
+5. **Practice exams**: `/ai/practice-exam/generate`, `/ai/practice-exam/grade` — JSON exam document + short-answer grading; language aligned with summaries when sources are recordings.
+6. **Hardening**: validation, per-user access control, integration tests.
+
+### In progress (product)
+
+- **PDF uploads** and **YouTube URLs** as inputs for **AI summary** and **practice exam** generation (alongside existing notes)—implementation finishing on main branch.

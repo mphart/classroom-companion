@@ -387,6 +387,23 @@ export function ActiveRecording() {
         const inputs = document.querySelectorAll('.note-input');
         (inputs[index + 1] as HTMLInputElement)?.focus();
       }, 0);
+      return;
+    }
+    if (e.key === 'Backspace') {
+      if (notes[index] !== '') return;
+      if (notes.length === 1) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      const newNotes = [...notes];
+      newNotes.splice(index, 1);
+      setNotes(newNotes);
+      const focusAt = Math.max(0, index - 1);
+      setTimeout(() => {
+        const inputs = document.querySelectorAll('.note-input');
+        (inputs[focusAt] as HTMLInputElement)?.focus();
+      }, 0);
     }
   };
 

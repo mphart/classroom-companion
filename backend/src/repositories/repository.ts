@@ -3,6 +3,8 @@ import type { AuthUser, CreateNoteInput, Item, Note, SortBy, SortDir, User } fro
 export interface ListItemsParams {
   userId: number;
   directoryPath: string;
+  /** When true, include every item under `directoryPath` (prefix match), not only direct children. */
+  tree?: boolean;
   query?: string;
   sortBy?: SortBy;
   sortDir?: SortDir;
@@ -23,5 +25,7 @@ export interface Repository {
   collectSummarySources(input: { userId: number; noteIds: number[]; folderIds: number[] }): Promise<{
     texts: string[];
     sourceCount: number;
+    /** When every source note shares the same `language` (e.g. all "Spanish"), use for AI summary output. */
+    summarizeLanguage: string | null;
   }>;
 }

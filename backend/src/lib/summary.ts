@@ -38,6 +38,17 @@ RULES FOR WHAT TO INCLUDE IN THE SUMMARY:
 - **Do not invent** facts; only summarize what is clearly tied to the lesson in the text.
 - If the transcript is mostly non-instructional noise, say so briefly in one short note, then list only the real instructional content you can find.`;
 
+export type SummarizeOptions = {
+  /** Human-readable label (e.g. note `language` / UI dropdown) to steer Gemini output language. */
+  outputLanguage?: string;
+};
+
+function outputLanguageClause(label: string | undefined): string {
+  const s = label?.trim() ?? "";
+  if (!s || /^english$/i.test(s)) return "";
+  return `\n\nOUTPUT LANGUAGE (mandatory): The lecture notes below are in **${s}**. Write the **entire** summary in **${s}** only — every heading, bullet, bold label, and sentence. Do not use English. If a technical term is normally kept in English in ${s} prose, you may keep that term in English.`;
+}
+
 async function generateMarkdown(modelName: string, apiKey: string, userPrompt: string): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
@@ -53,7 +64,7 @@ async function generateMarkdown(modelName: string, apiKey: string, userPrompt: s
  * Turn one or many note bodies into Markdown study notes.
  * Uses Google Gemini when `GEMINI_API_KEY` is set; uses a tiny local stub during tests only.
  */
-export async function summarizeSourceTexts(texts: string[]): Promise<string> {
+export async function summarizeSourceTexts(texts: string[], options?: SummarizeOptions): Promise<string> {
   const filtered = texts.map((t) => t.trim()).filter(Boolean);
   if (filtered.length === 0) {
     throw new SummarizerError("No text content to summarize.", 400);
@@ -73,9 +84,10 @@ export async function summarizeSourceTexts(texts: string[]): Promise<string> {
   }
 
   const corpus = filtered.map((t, i) => `### Source ${i + 1}\n${t}`).join("\n\n---\n\n");
+  const langExtra = outputLanguageClause(options?.outputLanguage);
 
   const summarizeBlock = (block: string, instruction: string) =>
-    generateMarkdown(getModelName(), apiKey, `${instruction}\n\n---\n\n${block}`);
+    generateMarkdown(getModelName(), apiKey, `${instruction}${langExtra}\n\n---\n\n${block}`);
 
   try {
     if (corpus.length <= CHUNK_CHARS) {

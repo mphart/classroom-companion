@@ -135,6 +135,12 @@ export class MySqlRepository implements Repository {
     const sortBy = sortByMap[params.sortBy ?? "lastEditedDate"];
     const sortDir: SortDir = params.sortDir ?? "desc";
     const query = params.query ? `%${params.query}%` : null;
+    const dir = normalizePath(params.directoryPath);
+    const tree = params.tree ?? false;
+    const pathSql = tree
+      ? "(i.directory_path = ? OR i.directory_path LIKE ?)"
+      : "i.directory_path = ?";
+    const pathParams = tree ? [dir, `${dir}%`] : [dir];
     const sql = `
       SELECT
         i.id,
@@ -147,12 +153,12 @@ export class MySqlRepository implements Repository {
         n.source_type AS note_source_type
       FROM items i
       LEFT JOIN notes n ON i.type = 'note' AND n.item_id = i.id
-      WHERE i.user_id = ? AND i.directory_path = ? AND (? IS NULL OR i.name LIKE ?)
+      WHERE i.user_id = ? AND ${pathSql} AND (? IS NULL OR i.name LIKE ?)
       ORDER BY ${sortBy} ${sortDir === "asc" ? "ASC" : "DESC"}
     `;
     const [rows] = await this.pool.execute<ItemRow[]>(sql, [
       params.userId,
-      normalizePath(params.directoryPath),
+      ...pathParams,
       query,
       query,
     ]);
@@ -170,6 +176,27 @@ export class MySqlRepository implements Repository {
   }
 
   async renameItem(input: { userId: number; itemId: number; newName: string }): Promise<Item | null> {
+    const [targetRows] = await this.pool.execute<ItemRow[]>(
+      "SELECT * FROM items WHERE id = ? AND user_id = ? LIMIT 1",
+      [input.itemId, input.userId],
+    );
+    if (targetRows.length === 0) return null;
+    const row = targetRows[0];
+
+    if (row.type === "folder") {
+      const oldPrefix = `${normalizePath(row.directory_path)}${row.name}/`;
+      const newPrefix = `${normalizePath(row.directory_path)}${input.newName}/`;
+      if (oldPrefix !== newPrefix) {
+        await this.pool.execute(
+          `UPDATE items SET
+            directory_path = CONCAT(?, SUBSTRING(directory_path, CHAR_LENGTH(?) + 1)),
+            updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = ? AND id != ? AND directory_path LIKE CONCAT(?, '%')`,
+          [newPrefix, oldPrefix, input.userId, input.itemId, oldPrefix],
+        );
+      }
+    }
+
     const [updateResult] = await this.pool.execute(
       "UPDATE items SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
       [input.newName, input.itemId, input.userId],
@@ -296,11 +323,19 @@ export class MySqlRepository implements Repository {
         });
       }
     }
-    if (selected.size === 0) return { texts: [], sourceCount: 0 };
+    if (selected.size === 0) return { texts: [], sourceCount: 0, summarizeLanguage: null };
     const ids = [...selected];
     const marks = ids.map(() => "?").join(",");
-    const [rows] = await this.pool.execute<NoteRow[]>(`SELECT raw_text FROM notes WHERE item_id IN (${marks})`, ids);
-    rows.forEach((row) => texts.push(row.raw_text));
-    return { texts, sourceCount: texts.length };
+    const [rows] = await this.pool.execute<NoteRow[]>(
+      `SELECT raw_text, language FROM notes WHERE item_id IN (${marks}) ORDER BY FIELD(item_id, ${marks})`,
+      [...ids, ...ids],
+    );
+    const nonempty = rows.filter((r) => typeof r.raw_text === "string" && r.raw_text.trim().length > 0);
+    nonempty.forEach((row) => texts.push(row.raw_text));
+    const langs = nonempty.map((r) => r.language?.trim()).filter(Boolean);
+    const unique = new Set(langs);
+    const summarizeLanguage =
+      nonempty.length > 0 && langs.length === nonempty.length && unique.size === 1 ? [...unique][0]! : null;
+    return { texts, sourceCount: texts.length, summarizeLanguage };
   }
 }

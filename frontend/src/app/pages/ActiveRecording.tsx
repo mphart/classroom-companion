@@ -6,6 +6,12 @@ import { floatToPCM16 } from '@/app/lib/audioPcm16k';
 import { getSessionUser, getToken } from '@/app/lib/authSession';
 import { joinDirectory, userRootDirectory } from '@/app/lib/pathUtils';
 import { buildConfigureMessage, getTranscriptionStreamUrl } from '@/app/lib/transcriptionWs';
+import {
+  piecesPlainText,
+  TranscriptConfidenceText,
+  type TranscriptRichPiece,
+  type TranscriptToken,
+} from '@/app/components/TranscriptConfidenceText';
 import { ThemeToggle } from '@/app/components/ThemeToggle';
 
 const BUFFER_SIZE = 4096;
@@ -13,8 +19,35 @@ const BUFFER_SIZE = 4096;
 type TranscriptInbound = {
   type: string;
   text?: string;
+  words?: TranscriptToken[];
   message?: string;
 };
+
+function parseInboundWords(raw: unknown): TranscriptToken[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: TranscriptToken[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as { word?: unknown; confidence?: unknown };
+    if (typeof o.word !== 'string' || !o.word.trim()) continue;
+    let confidence = 1;
+    if (typeof o.confidence === 'number' && Number.isFinite(o.confidence)) {
+      confidence = o.confidence;
+    } else if (typeof o.confidence === 'string' && o.confidence.trim() !== '') {
+      const n = Number(o.confidence);
+      if (Number.isFinite(n)) confidence = n;
+    }
+    out.push({ word: o.word, confidence });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function inboundToPiece(parsed: TranscriptInbound): TranscriptRichPiece | null {
+  const text = typeof parsed.text === 'string' ? parsed.text : '';
+  if (!text.trim()) return null;
+  const words = parseInboundWords(parsed.words);
+  return { text, ...(words ? { words } : {}) };
+}
 
 export function ActiveRecording() {
   const navigate = useNavigate();
@@ -33,8 +66,8 @@ export function ActiveRecording() {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [language, setLanguage] = useState('English');
   const [notes, setNotes] = useState<string[]>(['']);
-  const [transcriptCommitted, setTranscriptCommitted] = useState('');
-  const [transcriptPartial, setTranscriptPartial] = useState('');
+  const [transcriptCommittedPieces, setTranscriptCommittedPieces] = useState<TranscriptRichPiece[]>([]);
+  const [transcriptPartialPiece, setTranscriptPartialPiece] = useState<TranscriptRichPiece | null>(null);
   const [sttStatus, setSttStatus] = useState<{ kind: 'idle' | 'connecting' | 'live' | 'error'; message?: string }>({
     kind: 'idle',
   });
@@ -54,8 +87,8 @@ export function ActiveRecording() {
   const muteGainRef = useRef<GainNode | null>(null);
 
   const isPausedRef = useRef(false);
-  const transcriptCommittedRef = useRef('');
-  const transcriptPartialRef = useRef('');
+  const transcriptCommittedPiecesRef = useRef<TranscriptRichPiece[]>([]);
+  const transcriptPartialPieceRef = useRef<TranscriptRichPiece | null>(null);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -107,18 +140,18 @@ export function ActiveRecording() {
     }
   };
 
-  const fullTranscript = useMemo(
-    () => [transcriptCommitted, transcriptPartial].map((s) => s.trim()).filter(Boolean).join(' ').trim(),
-    [transcriptCommitted, transcriptPartial],
+  const fullTranscriptPlain = useMemo(
+    () => piecesPlainText(transcriptCommittedPieces, transcriptPartialPiece),
+    [transcriptCommittedPieces, transcriptPartialPiece],
   );
 
   useEffect(() => {
-    transcriptCommittedRef.current = transcriptCommitted;
-  }, [transcriptCommitted]);
+    transcriptCommittedPiecesRef.current = transcriptCommittedPieces;
+  }, [transcriptCommittedPieces]);
 
   useEffect(() => {
-    transcriptPartialRef.current = transcriptPartial;
-  }, [transcriptPartial]);
+    transcriptPartialPieceRef.current = transcriptPartialPiece;
+  }, [transcriptPartialPiece]);
 
   const attachScriptProcessorPipeline = useCallback((ws: WebSocket, audioContext: AudioContext) => {
     const stream = mediaStreamRef.current;
@@ -236,10 +269,10 @@ export function ActiveRecording() {
       return;
     }
 
-    setTranscriptCommitted('');
-    setTranscriptPartial('');
-    transcriptCommittedRef.current = '';
-    transcriptPartialRef.current = '';
+    setTranscriptCommittedPieces([]);
+    setTranscriptPartialPiece(null);
+    transcriptCommittedPiecesRef.current = [];
+    transcriptPartialPieceRef.current = null;
     setSttStatus({ kind: 'connecting' });
     setElapsedTime(0);
     setIsRecording(true);
@@ -281,22 +314,22 @@ export function ActiveRecording() {
             return;
           }
           if (parsed.type === 'partial') {
-            const t = typeof parsed.text === 'string' ? parsed.text : '';
-            transcriptPartialRef.current = t;
-            setTranscriptPartial(t);
+            const piece = inboundToPiece(parsed);
+            transcriptPartialPieceRef.current = piece;
+            setTranscriptPartialPiece(piece);
             return;
           }
           if (parsed.type === 'final') {
-            const text = typeof parsed.text === 'string' ? parsed.text.trim() : '';
-            if (text.length > 0) {
-              setTranscriptCommitted((prev) => {
-                const next = prev ? `${prev} ${text}` : text;
-                transcriptCommittedRef.current = next;
+            const piece = inboundToPiece(parsed);
+            if (piece) {
+              setTranscriptCommittedPieces((prev) => {
+                const next = [...prev, piece];
+                transcriptCommittedPiecesRef.current = next;
                 return next;
               });
             }
-            transcriptPartialRef.current = '';
-            setTranscriptPartial('');
+            transcriptPartialPieceRef.current = null;
+            setTranscriptPartialPiece(null);
           }
         } catch {
           /* ignored */
@@ -383,12 +416,11 @@ export function ActiveRecording() {
       '',
       'Transcript:',
       (() => {
-        const merged = [transcriptCommittedRef.current, transcriptPartialRef.current]
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-        return merged || fullTranscript || 'No transcript captured yet.';
+        const merged = piecesPlainText(
+          transcriptCommittedPiecesRef.current,
+          transcriptPartialPieceRef.current,
+        );
+        return merged || fullTranscriptPlain || 'No transcript captured yet.';
       })(),
     ].join('\n');
 
@@ -495,6 +527,12 @@ export function ActiveRecording() {
               <option>German</option>
               <option>Mandarin</option>
             </select>
+            {language !== 'English' ? (
+              <p className="mt-1.5 text-xs text-muted-foreground leading-snug">
+                Speech is translated into {language} on the server (Gladia). The API needs{' '}
+                <span className="font-mono text-[11px]">GLADIO_API_KEY</span> configured. English uses Deepgram only.
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -553,10 +591,13 @@ export function ActiveRecording() {
                     `Transcription issue: ${sttStatus.message ?? 'Unknown error'}. You can still finish and save notes.`}
                 </p>
               ) : null}
-              {!fullTranscript ? (
+              {!fullTranscriptPlain ? (
                 <p className="text-muted-foreground">Click Start to begin recording...</p>
               ) : (
-                <p className="whitespace-pre-wrap">{fullTranscript}</p>
+                <TranscriptConfidenceText
+                  committed={transcriptCommittedPieces}
+                  partial={transcriptPartialPiece}
+                />
               )}
             </div>
           </div>

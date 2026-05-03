@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
+# Browser must call the same origin as the static site so nginx can proxy to `api`.
+# Never bake in http://localhost:4000 here — that port is not exposed to the host by default.
+ENV VITE_API_URL=
 COPY frontend/ ./
 RUN npm run build
 

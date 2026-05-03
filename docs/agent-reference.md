@@ -32,7 +32,7 @@ Product and UX specs live in [`design-doc.md`](design-doc.md) and [`pages/`](pag
 
 - **HTTP:** `createApp()` in `backend/src/app.ts` — `/auth`, `/items`, `/folders`, `/notes`, `/ai`, `/health`.
 - **Process:** `backend/src/server.ts` — `http.createServer(app)` + **WebSocket** attachment for realtime STT (same listen port as HTTP).
-- **Transcription:** `backend/src/transcription/registerTranscriptionWss.ts` — path **`/transcription/stream`**, query **`?token=<JWT>`** (verify with same secret as REST). Forwards **binary PCM** to Deepgram; sends **JSON text** frames to the client (`partial`, `final`, `error`).
+- **Transcription:** `backend/src/transcription/registerTranscriptionWss.ts` — path **`/transcription/stream`**, query **`?token=<JWT>`** (verify with same secret as REST). Forwards **binary PCM** upstream: **Deepgram** when `configure.language` is **`en`**, otherwise **Gladia** (`POST https://api.gladia.io/v2/live` then WebSocket URL) with realtime **translation** into the target language. Sends **JSON text** frames to the client (`partial`, `final`, `error`). Helpers: `backend/src/lib/deepgramLive.ts`, `backend/src/lib/gladiaLive.ts`.
 - **Deepgram helpers:** `backend/src/lib/deepgramLive.ts` — listen URL (`linear16`, mono, 16 kHz), message normalization.
 
 ---
@@ -50,13 +50,14 @@ Used by **Docker Compose** for substitution into `docker-compose.yml`. Important
 | `GEMINI_API_KEY` | Summarization (`/ai/summarize/*`); optional alias may be documented in code |
 | `PRACTICE_API_KEY` | Gemini key for practice exam **generate** and **grade** (`/ai/practice-exam/*`); separate from `GEMINI_API_KEY` |
 | `GEMINI_MODEL` | Optional; default in compose e.g. `gemini-flash-latest` |
-| `DEEPGRAM_API_KEY` | Live transcription WebSocket proxy |
+| `DEEPGRAM_API_KEY` | Live STT (English) on `/transcription/stream` |
+| `GLADIO_API_KEY` | Gladia live translation for non‑English recording languages (alias `GLADIA_API_KEY`) |
 
 **Note:** `backend/.env` is **not** automatically loaded into Docker **`api`** unless you add `env_file` or duplicate keys in root `.env` and pass them through `environment:` in compose.
 
 ### Local backend (`backend/.env`)
 
-Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GEMINI_*`, and **`PRACTICE_API_KEY`** for practice exams (or rely on repo root `.env`, which is loaded after `backend/.env` for missing keys).
+Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB credentials, `JWT_SECRET`, `DEEPGRAM_API_KEY`, `GLADIO_API_KEY` (Gladia), `GEMINI_*`, and **`PRACTICE_API_KEY`** for practice exams (or rely on repo root `.env`, which is loaded after `backend/.env` for missing keys).
 
 ### Frontend build-time (`VITE_*`)
 
@@ -111,7 +112,7 @@ Used when running `npm run dev` in `backend/` (`dotenv` in `app.ts`). Set DB cre
 | Symptom | Likely cause |
 | --- | --- |
 | WebSocket fails to `ws://localhost:4000` while using Docker UI on **8080** | Browser must use **same host:port as the page** (or set `VITE_API_URL` / `VITE_WS_URL` correctly); ensure Nginx proxies `/transcription/stream`. |
-| `api` has no `DEEPGRAM_API_KEY` in Docker | Add to **root** `.env` and ensure compose passes `${DEEPGRAM_API_KEY}` into **`api.environment`**. |
+| `api` has no `DEEPGRAM_API_KEY` / `GLADIO_API_KEY` in Docker | Add to **root** `.env` and ensure compose passes keys into **`api.environment`**. English recordings need Deepgram; other languages need Gladia (`GLADIO_API_KEY`). |
 | Nginx won’t start | Invalid directive — check for `/*` comments; use `#` only. |
 | Summaries fail in Docker | Set `GEMINI_API_KEY` in env Compose passes to **`api`**. |
 

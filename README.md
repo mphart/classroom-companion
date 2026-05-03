@@ -2,6 +2,10 @@
 
 Web app for recording lectures, organizing courses and notes, **live speech-to-text** (Deepgram for English; Gladia for other languages), and **AI study tools** powered by **Google Gemini**. Summaries render as **Markdown** in the viewer; practice exams are interactive (multiple choice + short answer, with AI grading for short answers).
 
+### Demo Link
+
+https://youtu.be/RnJL3sY3aGA
+
 ## Features
 
 ### Core

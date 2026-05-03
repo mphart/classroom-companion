@@ -7,7 +7,6 @@ import {
   type GradeVerdict,
   type NoteDto,
 } from '@/app/lib/api';
-import { Label } from '@/app/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/app/components/ui/radio-group';
 import { Textarea } from '@/app/components/ui/textarea';
 
@@ -226,15 +225,27 @@ export function PracticeExam() {
                             value={mcChoice[i] ?? ''}
                             onValueChange={(v) => setMcChoice((prev) => ({ ...prev, [i]: v }))}
                             disabled={checked}
-                            className="gap-3"
+                            className="gap-2.5"
                           >
                             {q.options.map((opt, j) => (
-                              <div key={j} className="flex items-center gap-3">
-                                <RadioGroupItem value={String(j)} id={`q${i}-o${j}`} />
-                                <Label htmlFor={`q${i}-o${j}`} className="font-normal cursor-pointer">
-                                  {opt}
-                                </Label>
-                              </div>
+                              <label
+                                key={j}
+                                htmlFor={`q${i}-o${j}`}
+                                className={[
+                                  'flex cursor-pointer items-start gap-3.5 rounded-xl border-2 p-3.5 transition-colors',
+                                  'border-muted-foreground/30 bg-muted/25 hover:border-foreground/45 hover:bg-muted/40',
+                                  'has-[[data-state=checked]]:border-[var(--brand)] has-[[data-state=checked]]:bg-[var(--brand-soft-bg)]',
+                                  'has-[[data-state=checked]]:shadow-md dark:has-[[data-state=checked]]:shadow-[0_0_0_1px_rgba(255,255,255,0.06)]',
+                                  checked ? 'cursor-default opacity-90' : '',
+                                ].join(' ')}
+                              >
+                                <RadioGroupItem
+                                  value={String(j)}
+                                  id={`q${i}-o${j}`}
+                                  className="mt-0.5 border-foreground/40 data-[state=checked]:border-primary"
+                                />
+                                <span className="text-[15px] leading-snug text-foreground">{opt}</span>
+                              </label>
                             ))}
                           </RadioGroup>
                           {checked && mcResult[i] ? (

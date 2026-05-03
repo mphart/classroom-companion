@@ -8,6 +8,7 @@ import {
 } from "../lib/practiceExam";
 import { extractJargonTerms } from "../lib/jargonExtractor";
 import { answerSessionQuestion } from "../lib/sessionQa";
+import { matchSlideForTranscript, parseSlidePdfRawText } from "../lib/slideMatch";
 import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { summarizeSourceTexts } from "../lib/summary";
 import { createRequireAuth, type AuthenticatedRequest } from "../middleware/auth";
@@ -71,6 +72,12 @@ const jargonExtractSchema = z.object({
   language: z.string().trim().max(80).optional(),
 });
 
+const slideMatchSchema = z.object({
+  slideNoteId: z.number().int().positive(),
+  recentTranscript: z.string().max(20_000),
+  currentSlide: z.number().int().min(1).max(5000).optional(),
+});
+
 /** Per-user cooldown between Session Q&A requests (ms). */
 const SESSION_QA_COOLDOWN_MS = 12_000;
 const sessionQaLastRequestAt = new Map<number, number>();
@@ -79,10 +86,15 @@ const sessionQaLastRequestAt = new Map<number, number>();
 const JARGON_COOLDOWN_MS = 8_000;
 const jargonLastRequestAt = new Map<number, number>();
 
+/** Per-user cooldown between live slide-match requests (ms). */
+const SLIDE_MATCH_COOLDOWN_MS = 8_000;
+const slideMatchLastRequestAt = new Map<number, number>();
+
 /** Clears in-memory AI cooldowns (used by tests: each `bootstrap()` uses a fresh repo but user ids repeat). */
 export function resetAiCooldownMapsForTest(): void {
   sessionQaLastRequestAt.clear();
   jargonLastRequestAt.clear();
+  slideMatchLastRequestAt.clear();
 }
 
 export const createAiRoutes = (repo: Repository): Router => {
@@ -255,6 +267,45 @@ export const createAiRoutes = (repo: Repository): Router => {
         language: body.language,
       });
       return res.json({ answer });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/slide-match", async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const body = slideMatchSchema.parse(req.body);
+      const uid = req.authUserId!;
+      const now = Date.now();
+      const last = slideMatchLastRequestAt.get(uid) ?? 0;
+      if (now - last < SLIDE_MATCH_COOLDOWN_MS) {
+        const waitSec = Math.ceil((SLIDE_MATCH_COOLDOWN_MS - (now - last)) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before another slide sync.` });
+      }
+      slideMatchLastRequestAt.set(uid, now);
+
+      const found = await repo.getNoteById({ userId: uid, itemId: body.slideNoteId });
+      if (!found) return res.status(404).json({ error: "Slide deck note not found." });
+      if (found.note.sourceType !== "slide_pdf") {
+        return res.status(400).json({ error: "Selected note is not a slide deck (PDF)." });
+      }
+
+      const deck = parseSlidePdfRawText(found.note.rawText);
+      if (deck.length === 0) {
+        return res.status(400).json({ error: "Slide deck has no parseable pages." });
+      }
+
+      const match = await matchSlideForTranscript({
+        deck,
+        recentTranscript: body.recentTranscript,
+        currentSlide: body.currentSlide,
+      });
+      return res.json({
+        slideNumber: match.slideNumber,
+        confidence: match.confidence,
+        reason: match.reason,
+        deckSize: deck.length,
+      });
     } catch (error) {
       return next(error);
     }

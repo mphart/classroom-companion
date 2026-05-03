@@ -19,7 +19,9 @@ Default server port is `4000`.
 - `DB_USER=root`
 - `DB_PASSWORD=`
 - `DB_NAME=classroom_companion`
-- **`GEMINI_API_KEY`**: Required for `/ai/summarize/*`, **`POST /youtube/parse`** (Gemini summary after transcription), and **`POST /ai/session-qa`** (live Session Q&A on the recording screen). Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
+<<<<<<< HEAD
+- **`GEMINI_API_KEY`**: Required for `/ai/summarize/*` and **`POST /ai/session-qa`** (live Session Q&A on the recording screen). Get a key from Google AI Studio. Optional alias: **`GOOGLE_GENERATIVE_AI_API_KEY`**.
+- **`SLIDESHOW_API_KEY`**: Optional — **`POST /ai/slide-match`** (live slide sync on the recording page). When set, slide matching uses this Gemini key instead of **`GEMINI_API_KEY`**, so quotas stay separate. If unset, slide sync uses **`GEMINI_API_KEY`** (or **`GOOGLE_GENERATIVE_AI_API_KEY`**).
 - **`ASSEMBLYAI_API_KEY`**: Required for **`POST /youtube/parse`** (AssemblyAI transcription of locally downloaded audio — the API never sends the YouTube URL to AssemblyAI). Install **`ffmpeg`** and **`yt-dlp`** on your PATH for local dev (Docker API image installs both). With **`docker compose`**, define this in the **repository root** `.env` (same as `GEMINI_API_KEY`) — `backend/.env` is not mounted into the API container unless you add `env_file` yourself.
 - **`YT_DLP_BIN`** (optional): Override the `yt-dlp` executable name or path if it is not `yt-dlp` on PATH.
 - **`PRACTICE_API_KEY`**: Required for **`/ai/practice-exam/*`** (generate + grade). Uses the same Gemini SDK; keep this key separate from `GEMINI_API_KEY` if you want different quotas/projects. Also loaded from the repo root `.env` after `backend/.env` (see `app.ts`).

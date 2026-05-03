@@ -80,6 +80,9 @@ web_modules/
 # Local PDF slide uploads (dev)
 **/uploads/pdfs/
 
+# Copied by frontend/vite.config.ts `copyPdfWorker` from pdfjs-dist (large binary)
+frontend/public/pdf.worker.min.js
+
 # dotenv environment variable files
 .env
 .env.development.local

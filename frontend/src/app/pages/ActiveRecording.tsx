@@ -11,18 +11,25 @@ import {
   Loader2,
   MessageCircleQuestion,
   Mic,
+  Presentation,
   Sparkles,
+  Upload,
 } from 'lucide-react';
 import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
 import { MarkdownPreview } from '@/app/components/MarkdownPreview';
 import { PageAmbientDecor } from '@/app/components/PageAmbientDecor';
+import { RecordingSlidePanel } from '@/app/components/RecordingSlidePanel';
 import {
   createFolder,
   createNote,
   extractJargon,
+  fetchNotePdfBlob,
+  getNote,
   listItems,
+  matchCurrentSlide,
   sessionQaAsk,
+  uploadSlidePdf,
   type ListedItemDto,
 } from '@/app/lib/api';
 import {
@@ -55,6 +62,17 @@ const SESSION_QA_CHAR_WINDOW = 8000;
 const JARGON_SCAN_WORD_THRESHOLD = 25;
 /** Client-side minimum gap between jargon API calls (ms); server also enforces 8s. */
 const JARGON_CLIENT_COOLDOWN_MS = 12_000;
+
+/** Slide sync: minimum new transcript words since last call before re-asking Gemini. */
+const SLIDE_SYNC_WORD_THRESHOLD = 30;
+/** Client-side minimum gap between `/ai/slide-match` calls (ms); server enforces 8s too. */
+const SLIDE_SYNC_CLIENT_COOLDOWN_MS = 10_000;
+/** Recent transcript window sent to slide match (chars; matches backend SLIDE_MATCH_TRANSCRIPT_WINDOW). */
+const SLIDE_SYNC_TRANSCRIPT_WINDOW = 1500;
+/** Confidence threshold below which we keep the previous slide pinned. */
+const SLIDE_SYNC_MIN_CONFIDENCE = 0.5;
+/** Show the "drifting" hint after this many consecutive low-confidence calls. */
+const SLIDE_SYNC_DRIFT_THRESHOLD = 2;
 
 /** Bars in the live mic spectrum meter (voice band is spread across these bins). */
 const MIC_METER_BARS = 40;
@@ -146,6 +164,28 @@ export function ActiveRecording() {
   const [jargonTerms, setJargonTerms] = useState<{ term: string; definition: string; addedAt: number }[]>([]);
   const [jargonLoading, setJargonLoading] = useState(false);
   const [expandedJargonKey, setExpandedJargonKey] = useState<string | null>(null);
+
+  type SlideDeckState = {
+    noteId: number;
+    title: string;
+    pdfBlobUrl: string;
+    pageCount: number;
+  };
+  const [availableDecks, setAvailableDecks] = useState<ListedItemDto[]>([]);
+  const [loadingDecks, setLoadingDecks] = useState(false);
+  const [slideDeck, setSlideDeck] = useState<SlideDeckState | null>(null);
+  const [deckLoading, setDeckLoading] = useState(false);
+  const [deckError, setDeckError] = useState<string | null>(null);
+  const [currentSlide, setCurrentSlide] = useState(1);
+  const [slideConfidence, setSlideConfidence] = useState(0);
+  const [slideMatchLoading, setSlideMatchLoading] = useState(false);
+  const [lockedSlide, setLockedSlide] = useState<number | null>(null);
+  const [lowConfidenceStreak, setLowConfidenceStreak] = useState(0);
+
+  const slidePdfInputRef = useRef<HTMLInputElement | null>(null);
+  const lastSlideScanLenRef = useRef(0);
+  const lastSlideCallAtRef = useRef(0);
+  const slideMatchInFlightRef = useRef(false);
 
   const transcriptionWsRef = useRef<WebSocket | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -416,9 +456,207 @@ export function ActiveRecording() {
     }
   }, [userRoot]);
 
+  const reloadSlideDecks = useCallback(async () => {
+    if (!userRoot) return;
+    setLoadingDecks(true);
+    try {
+      const items = await listItems({
+        directory: userRoot,
+        tree: true,
+        sortBy: 'lastEditedDate',
+        sortDir: 'desc',
+      });
+      setAvailableDecks(items.filter((i) => i.type === 'note' && i.noteSourceType === 'slide_pdf'));
+    } catch {
+      /* deck list is non-critical; user can still upload inline */
+    } finally {
+      setLoadingDecks(false);
+    }
+  }, [userRoot]);
+
   useEffect(() => {
     void reloadCourses();
   }, [reloadCourses]);
+
+  useEffect(() => {
+    void reloadSlideDecks();
+  }, [reloadSlideDecks]);
+
+  const attachDeck = useCallback(
+    async (note: { id: number; title: string }) => {
+      setDeckError(null);
+      setDeckLoading(true);
+      try {
+        const [blob, full] = await Promise.all([fetchNotePdfBlob(note.id), getNote(note.id)]);
+        const blobUrl = URL.createObjectURL(blob);
+        setSlideDeck((prev) => {
+          if (prev) URL.revokeObjectURL(prev.pdfBlobUrl);
+          return { noteId: note.id, title: note.title, pdfBlobUrl: blobUrl, pageCount: 0 };
+        });
+        setCurrentSlide(1);
+        setSlideConfidence(0);
+        setLockedSlide(null);
+        setLowConfidenceStreak(0);
+        lastSlideScanLenRef.current = 0;
+        lastSlideCallAtRef.current = 0;
+        slideMatchInFlightRef.current = false;
+        toast.success(`Slide sync on — "${note.title}" attached.`);
+
+        const slideChunks = full.rawText.split(/\n*---\s*Slide\s+\d+\s*---\n*/i).filter((s) => s.trim());
+        if (slideChunks.length > 0) {
+          const totalWords = slideChunks.reduce((sum, chunk) => sum + countWords(chunk), 0);
+          const avg = totalWords / slideChunks.length;
+          if (avg < 10) {
+            toast.warning(
+              'Heads up: this deck has very little extractable text per slide — auto-sync may not be reliable.',
+              { duration: 6000 },
+            );
+          }
+        }
+      } catch (err) {
+        setDeckError(err instanceof Error ? err.message : 'Could not load slide deck.');
+        toast.error(err instanceof Error ? err.message : 'Could not load slide deck.');
+      } finally {
+        setDeckLoading(false);
+      }
+    },
+    [],
+  );
+
+  const detachDeck = useCallback(() => {
+    setSlideDeck((prev) => {
+      if (prev) URL.revokeObjectURL(prev.pdfBlobUrl);
+      return null;
+    });
+    setCurrentSlide(1);
+    setSlideConfidence(0);
+    setLockedSlide(null);
+    setLowConfidenceStreak(0);
+    setDeckError(null);
+  }, []);
+
+  const handleSlidePdfPicked = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !userRoot) return;
+      if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+        toast.error('Please choose a PDF file.');
+        return;
+      }
+      setDeckLoading(true);
+      try {
+        const targetDirectory =
+          saveLocation === 'course' && selectedCourse
+            ? joinDirectory(userRoot, selectedCourse)
+            : userRoot;
+        const note = await uploadSlidePdf(targetDirectory, file);
+        await reloadSlideDecks();
+        await attachDeck({ id: note.id, title: note.title });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'PDF upload failed.');
+      } finally {
+        setDeckLoading(false);
+      }
+    },
+    [attachDeck, reloadSlideDecks, saveLocation, selectedCourse, userRoot],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (slideDeck) URL.revokeObjectURL(slideDeck.pdfBlobUrl);
+    };
+    // Only run on unmount; guarding by `slideDeck` would revoke too early on re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!isRecording || isPaused) return;
+    if (!slideDeck) return;
+    if (lockedSlide !== null) return;
+    const deltaStart = lastSlideScanLenRef.current;
+    const delta = fullTranscriptPlain.slice(deltaStart);
+    if (countWords(delta) < SLIDE_SYNC_WORD_THRESHOLD) return;
+    if (Date.now() - lastSlideCallAtRef.current < SLIDE_SYNC_CLIENT_COOLDOWN_MS) return;
+    if (slideMatchInFlightRef.current) return;
+
+    const recent =
+      fullTranscriptPlain.length <= SLIDE_SYNC_TRANSCRIPT_WINDOW
+        ? fullTranscriptPlain
+        : fullTranscriptPlain.slice(-SLIDE_SYNC_TRANSCRIPT_WINDOW);
+    if (!recent.trim()) return;
+
+    const snapshotEnd = fullTranscriptPlain.length;
+    const noteId = slideDeck.noteId;
+    const currentSlideAtCall = currentSlide;
+
+    slideMatchInFlightRef.current = true;
+    lastSlideCallAtRef.current = Date.now();
+    setSlideMatchLoading(true);
+
+    void (async () => {
+      try {
+        const result = await matchCurrentSlide({
+          slideNoteId: noteId,
+          recentTranscript: recent,
+          currentSlide: currentSlideAtCall,
+        });
+        lastSlideScanLenRef.current = snapshotEnd;
+        setSlideConfidence(result.confidence);
+        if (result.deckSize > 0) {
+          setSlideDeck((prev) =>
+            prev && prev.noteId === noteId && prev.pageCount !== result.deckSize
+              ? { ...prev, pageCount: result.deckSize }
+              : prev,
+          );
+        }
+        if (result.confidence >= SLIDE_SYNC_MIN_CONFIDENCE) {
+          setCurrentSlide(result.slideNumber);
+          setLowConfidenceStreak(0);
+        } else {
+          setLowConfidenceStreak((s) => s + 1);
+        }
+      } catch {
+        /* background poll — keep current slide */
+      } finally {
+        slideMatchInFlightRef.current = false;
+        setSlideMatchLoading(false);
+      }
+    })();
+  }, [fullTranscriptPlain, isRecording, isPaused, slideDeck, lockedSlide, currentSlide]);
+
+  const handleSlidePrev = useCallback(() => {
+    setCurrentSlide((s) => {
+      const next = Math.max(1, s - 1);
+      setLockedSlide(next);
+      return next;
+    });
+  }, []);
+
+  const handleSlideNext = useCallback(() => {
+    setCurrentSlide((s) => {
+      const cap = slideDeck?.pageCount && slideDeck.pageCount > 0 ? slideDeck.pageCount : s + 1;
+      const next = Math.min(cap, s + 1);
+      setLockedSlide(next);
+      return next;
+    });
+  }, [slideDeck?.pageCount]);
+
+  const handleToggleSlideLock = useCallback(() => {
+    setLockedSlide((prev) => {
+      if (prev !== null) {
+        setLowConfidenceStreak(0);
+        return null;
+      }
+      return currentSlide;
+    });
+  }, [currentSlide]);
+
+  const handleDeckPageCountKnown = useCallback((count: number) => {
+    setSlideDeck((prev) =>
+      prev && prev.pageCount !== count ? { ...prev, pageCount: count } : prev,
+    );
+  }, []);
 
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -874,6 +1112,83 @@ export function ActiveRecording() {
             </select>
           </div>
 
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Presentation className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+                Slide deck
+              </label>
+              {slideDeck ? (
+                <button
+                  type="button"
+                  onClick={detachDeck}
+                  className="text-[0.7rem] font-medium text-muted-foreground hover:text-destructive"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+            <p className="mb-2 text-xs leading-snug text-muted-foreground">
+              Optional: pin the slide the lecturer is on. AI follows along from the live transcript.
+            </p>
+            <select
+              value={slideDeck?.noteId ? String(slideDeck.noteId) : ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '__upload__') {
+                  slidePdfInputRef.current?.click();
+                  return;
+                }
+                if (!v) {
+                  detachDeck();
+                  return;
+                }
+                const id = Number.parseInt(v, 10);
+                const found = availableDecks.find((d) => d.id === id);
+                if (found) void attachDeck({ id: found.id, title: found.name });
+              }}
+              disabled={deckLoading}
+              className="w-full rounded-lg border border-border bg-input-background px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:opacity-60"
+              style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+            >
+              <option value="">{loadingDecks ? 'Loading decks…' : 'No deck — skip slide sync'}</option>
+              {availableDecks.length > 0 ? (
+                <optgroup label="Your slide decks">
+                  {availableDecks.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              <option value="__upload__">+ Upload a PDF…</option>
+            </select>
+            <input
+              ref={slidePdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => void handleSlidePdfPicked(e)}
+            />
+            {deckLoading ? (
+              <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden /> Preparing deck…
+              </p>
+            ) : null}
+            {deckError ? (
+              <p className="mt-2 text-xs text-destructive">{deckError}</p>
+            ) : null}
+            {slideDeck && !deckLoading ? (
+              <button
+                type="button"
+                onClick={() => slidePdfInputRef.current?.click()}
+                className="mt-2 inline-flex items-center gap-1 text-[0.7rem] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Upload className="size-3" aria-hidden /> Replace with another PDF
+              </button>
+            ) : null}
+          </div>
+
         </div>
 
         <button
@@ -975,6 +1290,22 @@ export function ActiveRecording() {
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-4xl space-y-4">
+            {slideDeck ? (
+              <RecordingSlidePanel
+                deckTitle={slideDeck.title}
+                pdfBlobUrl={slideDeck.pdfBlobUrl}
+                currentSlide={currentSlide}
+                confidence={slideConfidence}
+                isLocked={lockedSlide !== null}
+                isLoading={slideMatchLoading}
+                driftHint={lowConfidenceStreak >= SLIDE_SYNC_DRIFT_THRESHOLD}
+                onPageCountKnown={handleDeckPageCountKnown}
+                onPrev={handleSlidePrev}
+                onNext={handleSlideNext}
+                onToggleLock={handleToggleSlideLock}
+                onDetach={detachDeck}
+              />
+            ) : null}
             <div className="min-h-96 rounded-xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur-sm dark:bg-card/90">
               <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
                 <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />

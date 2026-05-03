@@ -282,6 +282,23 @@ describe("MVP backend routes", () => {
     expect(["correct", "partial", "incorrect"]).toContain(grade.body.results[0].verdict);
   });
 
+  it("answers session Q&A from transcript (stub in test)", async () => {
+    const { app, token } = await bootstrap();
+    const transcript =
+      "Professor Lee explains photosynthesis. Chlorophyll absorbs light. The midterm will cover chapter four only.";
+    const qa = await request(app)
+      .post("/ai/session-qa")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        transcript,
+        question: "What will the midterm cover?",
+        language: "English",
+      });
+    expect(qa.status).toBe(200);
+    expect(typeof qa.body.answer).toBe("string");
+    expect((qa.body.answer as string).length).toBeGreaterThan(0);
+  });
+
   it("moves a note into a folder", async () => {
     const { app, token } = await bootstrap();
     await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({

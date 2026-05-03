@@ -58,6 +58,17 @@ All protected routes require `Authorization: Bearer <jwt>`.
   - Response `201`: `{ "note": { ...sourceType: "generated_summary"... }, "sourceCount": 5 }`
   - Single-note summarize: for a **`recording`**, Gemini follows that note’s `language` when it is not English; otherwise output defaults to English.
 
+## Session Q&A (live recording; Gemini)
+
+Uses **`GEMINI_API_KEY`** (same as summaries). Client sends the **recent transcript window** from the browser; server keeps the last **8000** characters for context.
+
+- `POST /ai/session-qa`
+  - Request: `{ "transcript": "<plain text, up to ~120k chars; server uses tail>", "question": "What did they say about…?", "language"?: "Spanish" }`
+  - Response `200`: `{ "answer": "<Markdown-friendly string>" }`
+  - Response `400`: empty question or no usable transcript text.
+  - Response `429`: more than one request per **12 seconds** per user (cooldown).
+  - Response `503`: Gemini not configured.
+
 ## Practice exams (Gemini)
 
 Server uses **`PRACTICE_API_KEY`** (not `GEMINI_API_KEY`) for generate and grade. Same `GEMINI_MODEL` applies unless you add a separate model later.

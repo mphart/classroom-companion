@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { FolderOpen, Languages, Mic, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import { ChevronDown, ChevronUp, FolderOpen, Languages, MessageCircleQuestion, Mic, Sparkles } from 'lucide-react';
 import cornerLogo from '@/assets/corner-logo.svg';
 import '@/styles/brand-ambient.css';
-import { createFolder, createNote, listItems, type ListedItemDto } from '@/app/lib/api';
+import { MarkdownPreview } from '@/app/components/MarkdownPreview';
+import { createFolder, createNote, listItems, sessionQaAsk, type ListedItemDto } from '@/app/lib/api';
 import {
   extractImportantDatesFromTranscript,
   extractTranscriptSection,
@@ -29,6 +31,13 @@ const BUFFER_SIZE = 4096;
 
 /** `<select>` value for saving to your library root (same as Home). */
 const SAVE_TO_HOME_VALUE = '__library_home__';
+
+/** Must match backend `SESSION_QA_TRANSCRIPT_WINDOW` for context sent to Session Q&A. */
+const SESSION_QA_CHAR_WINDOW = 8000;
+
+/** Bars in the live mic spectrum meter (voice band is spread across these bins). */
+const MIC_METER_BARS = 40;
+const MIC_METER_EMIT_MS = 45;
 
 type TranscriptInbound = {
   type: string;
@@ -93,6 +102,11 @@ export function ActiveRecording() {
   const [newCourseName, setNewCourseName] = useState('');
   const [saveLocation, setSaveLocation] = useState<'home' | 'course'>('home');
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [sessionQaOpen, setSessionQaOpen] = useState(true);
+  const [sessionQaInput, setSessionQaInput] = useState('');
+  const [sessionQaLoading, setSessionQaLoading] = useState(false);
+  const [sessionQaMessages, setSessionQaMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+  const [micSpectrum, setMicSpectrum] = useState<number[]>(() => Array.from({ length: MIC_METER_BARS }, () => 0));
 
   const transcriptionWsRef = useRef<WebSocket | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -100,6 +114,9 @@ export function ActiveRecording() {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const mediaSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const muteGainRef = useRef<GainNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const micMeterRafRef = useRef(0);
+  const micMeterLastEmitRef = useRef(0);
 
   const isPausedRef = useRef(false);
   const transcriptCommittedPiecesRef = useRef<TranscriptRichPiece[]>([]);
@@ -115,17 +132,64 @@ export function ActiveRecording() {
     return () => clearInterval(interval);
   }, [isRecording, isPaused]);
 
+  const stopMicMeterLoop = useCallback(() => {
+    cancelAnimationFrame(micMeterRafRef.current);
+    micMeterRafRef.current = 0;
+    micMeterLastEmitRef.current = 0;
+    setMicSpectrum(Array.from({ length: MIC_METER_BARS }, () => 0));
+  }, []);
+
   const teardownAudioGraph = useCallback(() => {
+    stopMicMeterLoop();
     try {
+      analyserRef.current?.disconnect();
       scriptProcessorRef.current?.disconnect();
       mediaSourceRef.current?.disconnect();
       muteGainRef.current?.disconnect();
     } catch {
       /* noop */
     }
+    analyserRef.current = null;
     scriptProcessorRef.current = null;
     mediaSourceRef.current = null;
     muteGainRef.current = null;
+  }, [stopMicMeterLoop]);
+
+  const startMicMeterLoop = useCallback(() => {
+    cancelAnimationFrame(micMeterRafRef.current);
+    const zeros = () => Array.from({ length: MIC_METER_BARS }, () => 0);
+    const tick = (now: number) => {
+      micMeterRafRef.current = requestAnimationFrame(tick);
+      const an = analyserRef.current;
+      if (!an) return;
+
+      if (isPausedRef.current) {
+        if (now - micMeterLastEmitRef.current > 120) {
+          micMeterLastEmitRef.current = now;
+          setMicSpectrum(zeros());
+        }
+        return;
+      }
+
+      const buf = new Uint8Array(an.frequencyBinCount);
+      an.getByteFrequencyData(buf);
+      const bins = Math.max(1, Math.floor(buf.length * 0.88));
+      const chunk = bins / MIC_METER_BARS;
+      const bars: number[] = [];
+      for (let i = 0; i < MIC_METER_BARS; i++) {
+        let m = 0;
+        const start = Math.floor(i * chunk);
+        const end = Math.min(bins, Math.floor((i + 1) * chunk));
+        for (let j = start; j < end; j++) m = Math.max(m, buf[j] ?? 0);
+        bars.push(m / 255);
+      }
+
+      if (now - micMeterLastEmitRef.current >= MIC_METER_EMIT_MS) {
+        micMeterLastEmitRef.current = now;
+        setMicSpectrum(bars);
+      }
+    };
+    micMeterRafRef.current = requestAnimationFrame(tick);
   }, []);
 
   const stopMediaTracks = () => {
@@ -160,6 +224,12 @@ export function ActiveRecording() {
     [transcriptCommittedPieces, transcriptPartialPiece],
   );
 
+  const transcriptForSessionQa = useMemo(() => {
+    const t = fullTranscriptPlain.replace(/\s+/g, ' ').trim();
+    if (!t) return '';
+    return t.length <= SESSION_QA_CHAR_WINDOW ? t : t.slice(-SESSION_QA_CHAR_WINDOW);
+  }, [fullTranscriptPlain]);
+
   useEffect(() => {
     transcriptCommittedPiecesRef.current = transcriptCommittedPieces;
   }, [transcriptCommittedPieces]);
@@ -167,6 +237,14 @@ export function ActiveRecording() {
   useEffect(() => {
     transcriptPartialPieceRef.current = transcriptPartialPiece;
   }, [transcriptPartialPiece]);
+
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(micMeterRafRef.current);
+      micMeterRafRef.current = 0;
+    },
+    [],
+  );
 
   const attachScriptProcessorPipeline = useCallback((ws: WebSocket, audioContext: AudioContext) => {
     const stream = mediaStreamRef.current;
@@ -195,10 +273,20 @@ export function ActiveRecording() {
       }
     };
 
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.82;
+    analyser.minDecibels = -85;
+    analyser.maxDecibels = -25;
+    analyserRef.current = analyser;
+    source.connect(analyser);
+
     source.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
-  }, [teardownAudioGraph]);
+
+    startMicMeterLoop();
+  }, [teardownAudioGraph, startMicMeterLoop]);
 
   const buildAudioGraphAndStreamPCM = useCallback(
     async (ws: WebSocket) => {
@@ -272,6 +360,37 @@ export function ActiveRecording() {
     }
   };
 
+  const handleSessionQaSubmit = useCallback(async () => {
+    const q = sessionQaInput.trim();
+    if (!q) return;
+    if (!isRecording) {
+      toast.error('Start recording first.');
+      return;
+    }
+    if (isPaused) {
+      toast.error('Resume recording to ask a question.');
+      return;
+    }
+    if (!transcriptForSessionQa) {
+      toast.error('Wait until there is transcript text from the lecture.');
+      return;
+    }
+    setSessionQaLoading(true);
+    try {
+      const { answer } = await sessionQaAsk({
+        transcript: transcriptForSessionQa,
+        question: q,
+        language: language === 'English' ? undefined : language,
+      });
+      setSessionQaMessages((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: answer }]);
+      setSessionQaInput('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not get an answer.');
+    } finally {
+      setSessionQaLoading(false);
+    }
+  }, [sessionQaInput, isRecording, isPaused, transcriptForSessionQa, language]);
+
   const handleStartRecording = async () => {
     if (saveLocation === 'course' && !selectedCourse) {
       window.alert('Please select or create a course folder first.');
@@ -288,6 +407,8 @@ export function ActiveRecording() {
     setTranscriptPartialPiece(null);
     transcriptCommittedPiecesRef.current = [];
     transcriptPartialPieceRef.current = null;
+    setSessionQaMessages([]);
+    setSessionQaInput('');
     setSttStatus({ kind: 'connecting' });
     setElapsedTime(0);
     setIsRecording(true);
@@ -687,8 +808,71 @@ export function ActiveRecording() {
           </div>
         </div>
 
+        {isRecording ? (
+          <div className="relative z-20 shrink-0 border-b border-[var(--brand-soft-border)] bg-gradient-to-b from-[var(--brand-soft-bg)]/60 via-card/98 to-card/95 px-4 py-3 backdrop-blur-md dark:from-[var(--brand-soft-bg)]/30">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-md ring-2 ring-[var(--brand)]/30"
+                    style={{
+                      background:
+                        'linear-gradient(145deg, var(--brand-soft-bg), color-mix(in srgb, var(--brand) 18%, transparent))',
+                    }}
+                  >
+                    <Mic className="size-[1.15rem] text-[var(--brand-deep)] dark:text-[var(--brand)]" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Live input
+                    </p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {isPaused ? 'Paused — meter idle' : 'Speech energy'}
+                    </p>
+                  </div>
+                </div>
+                {!isPaused ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[0.65rem] font-medium text-emerald-800 dark:text-emerald-400">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                    </span>
+                    Listening
+                  </span>
+                ) : (
+                  <span className="text-[0.65rem] font-medium text-muted-foreground">Resume for live levels</span>
+                )}
+              </div>
+              <div
+                className="flex h-[3.25rem] items-end justify-center gap-px rounded-xl border border-border/70 bg-gradient-to-b from-background/90 to-muted/40 px-2 py-2 shadow-inner sm:h-16 sm:gap-0.5"
+                role="img"
+                aria-label={isPaused ? 'Microphone level idle while paused' : 'Microphone level spectrum'}
+              >
+                {micSpectrum.map((v, i) => (
+                  <div
+                    key={i}
+                    className="min-h-[4px] min-w-0 flex-1 rounded-full transition-[height,opacity] duration-75 ease-out"
+                    style={{
+                      height: `${Math.max(12, 12 + v * 88)}%`,
+                      background:
+                        v > 0.55
+                          ? 'linear-gradient(to top, rgb(22 163 74), var(--brand), color-mix(in srgb, var(--brand-hover) 85%, white))'
+                          : 'linear-gradient(to top, var(--brand-deep), var(--brand))',
+                      opacity: isPaused ? 0.22 : 0.28 + v * 0.72,
+                      boxShadow:
+                        !isPaused && v > 0.45
+                          ? '0 0 10px color-mix(in srgb, var(--brand) 45%, transparent)'
+                          : undefined,
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-4xl space-y-4">
             <div className="min-h-96 rounded-xl border border-border bg-card/95 p-6 shadow-sm backdrop-blur-sm dark:bg-card/90">
               <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
                 <Sparkles className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
@@ -714,6 +898,94 @@ export function ActiveRecording() {
                   partial={transcriptPartialPiece}
                 />
               )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card/95 p-4 shadow-sm backdrop-blur-sm dark:bg-card/90">
+              <button
+                type="button"
+                onClick={() => setSessionQaOpen((o) => !o)}
+                className="flex w-full items-center justify-between gap-2 rounded-lg text-left transition-colors hover:bg-muted/40"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <MessageCircleQuestion className="size-4 shrink-0 text-[var(--brand)]" aria-hidden />
+                  Session Q&amp;A
+                </span>
+                {sessionQaOpen ? (
+                  <ChevronUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                ) : (
+                  <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                )}
+              </button>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Your AI TA uses only this session&apos;s transcript (last ~{SESSION_QA_CHAR_WINDOW.toLocaleString()}{' '}
+                characters). One question every ~12 seconds.
+              </p>
+
+              {sessionQaOpen ? (
+                <>
+                  <div className="mt-3 max-h-52 overflow-y-auto space-y-2 rounded-lg border border-border/80 bg-muted/20 p-2">
+                    {sessionQaMessages.length === 0 ? (
+                      <p className="px-1 py-2 text-xs text-muted-foreground">
+                        Ask anything covered in the audio so far — answers stay grounded in the transcript.
+                      </p>
+                    ) : (
+                      sessionQaMessages.map((m, i) => (
+                        <div
+                          key={`${m.role}-${i}`}
+                          className={
+                            m.role === 'user'
+                              ? 'ml-4 rounded-lg bg-[var(--brand-soft-bg)] px-3 py-2 text-sm text-foreground'
+                              : 'mr-4 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground'
+                          }
+                        >
+                          {m.role === 'assistant' ? (
+                            <div className="prose prose-sm dark:prose-invert max-w-none [&_p]:mb-2 [&_p:last-child]:mb-0">
+                              <MarkdownPreview markdown={m.text} />
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap">{m.text}</p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <textarea
+                      value={sessionQaInput}
+                      onChange={(e) => setSessionQaInput(e.target.value)}
+                      placeholder={
+                        isRecording && !isPaused
+                          ? 'e.g. What’s the definition they gave for…?'
+                          : 'Start recording to ask…'
+                      }
+                      disabled={!isRecording || isPaused || sessionQaLoading}
+                      rows={2}
+                      className="min-h-[3rem] flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:opacity-60"
+                      style={{ '--tw-ring-color': 'var(--brand)' } as React.CSSProperties}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          void handleSessionQaSubmit();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSessionQaSubmit()}
+                      disabled={
+                        sessionQaLoading || !isRecording || isPaused || !sessionQaInput.trim() || !transcriptForSessionQa
+                      }
+                      className="shrink-0 rounded-lg px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                      style={{ backgroundColor: 'var(--brand)' }}
+                    >
+                      {sessionQaLoading ? 'Thinking…' : 'Ask'}
+                    </button>
+                  </div>
+                  {isRecording && !isPaused && !transcriptForSessionQa ? (
+                    <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">Waiting for transcript…</p>
+                  ) : null}
+                </>
+              ) : null}
             </div>
           </div>
         </div>

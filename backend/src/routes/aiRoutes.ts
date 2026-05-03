@@ -5,6 +5,7 @@ import {
   gradeShortAnswers,
   parseExamDocument,
 } from "../lib/practiceExam";
+import { answerSessionQuestion } from "../lib/sessionQa";
 import { inferSelectionSummaryLanguage } from "../lib/inferSelectionSummaryLanguage";
 import { summarizeSourceTexts } from "../lib/summary";
 import { requireAuth, type AuthenticatedRequest } from "../middleware/auth";
@@ -44,6 +45,16 @@ const practiceExamGradeSchema = z.object({
     }),
   ),
 });
+
+const sessionQaSchema = z.object({
+  transcript: z.string().max(120_000),
+  question: z.string().trim().min(1).max(1500),
+  language: z.string().trim().max(80).optional(),
+});
+
+/** Per-user cooldown between Session Q&A requests (ms). */
+const SESSION_QA_COOLDOWN_MS = 12_000;
+const sessionQaLastRequestAt = new Map<number, number>();
 
 export const createAiRoutes = (repo: Repository): Router => {
   const router = Router();
@@ -158,6 +169,29 @@ export const createAiRoutes = (repo: Repository): Router => {
         feedbackLanguage: found.note.language,
       });
       return res.json({ results });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/session-qa", async (req: AuthenticatedRequest, res, next) => {
+    try {
+      const body = sessionQaSchema.parse(req.body);
+      const uid = req.authUserId!;
+      const now = Date.now();
+      const last = sessionQaLastRequestAt.get(uid) ?? 0;
+      if (now - last < SESSION_QA_COOLDOWN_MS) {
+        const waitSec = Math.ceil((SESSION_QA_COOLDOWN_MS - (now - last)) / 1000);
+        return res.status(429).json({ error: `Please wait ${waitSec}s before another question.` });
+      }
+      sessionQaLastRequestAt.set(uid, now);
+
+      const answer = await answerSessionQuestion({
+        transcript: body.transcript,
+        question: body.question,
+        language: body.language,
+      });
+      return res.json({ answer });
     } catch (error) {
       return next(error);
     }

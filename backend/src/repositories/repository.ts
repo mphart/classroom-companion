@@ -3,6 +3,8 @@ import type { AuthUser, CreateNoteInput, Item, Note, SortBy, SortDir, User } fro
 export interface ListItemsParams {
   userId: number;
   directoryPath: string;
+  /** When true, include every item under `directoryPath` (prefix match), not only direct children. */
+  tree?: boolean;
   query?: string;
   sortBy?: SortBy;
   sortDir?: SortDir;

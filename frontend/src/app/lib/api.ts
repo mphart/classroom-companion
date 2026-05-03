@@ -9,7 +9,7 @@ export type ListedItemDto = {
   directory: string;
   createdDate: string;
   lastEditedDate: string;
-  noteSourceType?: 'recording' | 'generated_summary';
+  noteSourceType?: 'recording' | 'generated_summary' | 'generated_practice_exam';
 };
 
 export type NoteDto = {
@@ -22,7 +22,7 @@ export type NoteDto = {
   aiSummary: string | null;
   language: string;
   durationSeconds: number;
-  sourceType: 'recording' | 'generated_summary';
+  sourceType: 'recording' | 'generated_summary' | 'generated_practice_exam';
   generatedFromCount: number | null;
 };
 
@@ -137,6 +137,30 @@ export async function summarizeSelection(body: {
   title: string;
 }): Promise<{ note: NoteDto; sourceCount: number }> {
   return apiPost('/ai/summarize/selection', body) as Promise<{ note: NoteDto; sourceCount: number }>;
+}
+
+export async function generatePracticeExam(body: {
+  noteIds: number[];
+  folderIds: number[];
+  outputDirectory: string;
+  title: string;
+  questionCount: number;
+  includeMultipleChoice: boolean;
+  includeShortAnswer: boolean;
+  otherInstructions?: string;
+}): Promise<{ note: NoteDto; sourceCount: number }> {
+  return apiPost('/ai/practice-exam/generate', body) as Promise<{ note: NoteDto; sourceCount: number }>;
+}
+
+export type GradeVerdict = 'correct' | 'partial' | 'incorrect';
+
+export async function gradePracticeExamShortAnswers(body: {
+  noteId: number;
+  responses: { questionIndex: number; answer: string }[];
+}): Promise<{ results: { questionIndex: number; verdict: GradeVerdict; feedback: string }[] }> {
+  return apiPost('/ai/practice-exam/grade', body) as Promise<{
+    results: { questionIndex: number; verdict: GradeVerdict; feedback: string }[];
+  }>;
 }
 
 export async function regenerateNoteAiSummary(noteId: number): Promise<NoteDto> {

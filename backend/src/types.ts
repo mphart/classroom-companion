@@ -24,13 +24,15 @@ export interface Item {
   noteSourceType?: Note["sourceType"] | null;
 }
 
+export type NoteSourceType = "recording" | "generated_summary" | "generated_practice_exam";
+
 export interface Note {
   itemId: number;
   rawText: string;
   aiSummary: string | null;
   language: string;
   durationSeconds: number;
-  sourceType: "recording" | "generated_summary";
+  sourceType: NoteSourceType;
   generatedFromCount: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +53,6 @@ export interface CreateNoteInput {
   aiSummary?: string | null;
   language: string;
   durationSeconds: number;
-  sourceType?: "recording" | "generated_summary";
+  sourceType?: NoteSourceType;
   generatedFromCount?: number | null;
 }

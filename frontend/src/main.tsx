@@ -1,7 +1,7 @@
 
   import { ThemeProvider } from "next-themes";
   import { createRoot } from "react-dom/client";
-  import App from "./app/App.tsx";
+  import App from "./app/App";
   import faviconUrl from "./assets/corner-logo.svg?url";
   import "./styles/index.css";
 

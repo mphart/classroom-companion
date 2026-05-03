@@ -61,11 +61,15 @@ export function Viewer() {
   const subtitle =
     note && note.sourceType === 'generated_summary' && typeof note.generatedFromCount === 'number'
       ? `Gemini-generated • merged from ${note.generatedFromCount} source note(s)`
-      : note
-        ? note.sourceType === 'generated_summary'
-          ? 'Gemini-generated summary note'
-          : 'Saved lecture note'
-        : '';
+      : note && note.sourceType === 'generated_practice_exam' && typeof note.generatedFromCount === 'number'
+        ? `Practice exam • from ${note.generatedFromCount} source note(s)`
+        : note
+          ? note.sourceType === 'generated_summary'
+            ? 'Gemini-generated summary note'
+            : note.sourceType === 'generated_practice_exam'
+              ? 'Generated practice exam'
+              : 'Saved lecture note'
+          : '';
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
@@ -114,6 +118,17 @@ export function Viewer() {
                 {summarizing ? 'Generating…' : 'Summarize with Gemini'}
               </button>
             ) : null}
+            {note?.sourceType === 'generated_practice_exam' && noteId !== undefined ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                className="px-4 py-2 text-white rounded-lg disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                Open practice exam
+              </button>
+            ) : null}
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -129,7 +144,23 @@ export function Viewer() {
               {!loading && !error && note ? (
                 <div className="space-y-6">
                   <h1 className="text-3xl mt-2">{note.title}</h1>
-                  {note.sourceType === 'generated_summary' ? (
+                  {note.sourceType === 'generated_practice_exam' ? (
+                    <div className="rounded-lg border border-border bg-muted/20 p-8 text-center space-y-4">
+                      <p className="text-muted-foreground">
+                        This item is an interactive practice exam. Open it to answer questions and check your work.
+                      </p>
+                      {noteId !== undefined ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/practice-exam', { state: { noteId } })}
+                          className="px-6 py-2.5 text-white rounded-lg"
+                          style={{ backgroundColor: 'var(--brand)' }}
+                        >
+                          Open practice exam
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : note.sourceType === 'generated_summary' ? (
                     <div>
                       <h2 className="text-2xl mb-3">AI summary</h2>
                       <div className="rounded-lg border border-border bg-muted/20 p-6">

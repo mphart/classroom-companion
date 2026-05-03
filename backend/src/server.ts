@@ -6,13 +6,23 @@ import { attachTranscriptionWss } from "./transcription/registerTranscriptionWss
 
 const port = Number(process.env.PORT ?? 4000);
 
-const repo = MySqlRepository.fromEnv();
-const app = createApp(repo);
-const server = http.createServer(app);
+async function start() {
+  const repo = MySqlRepository.fromEnv();
+  await repo.ensureGeneratedPracticeExamEnum();
 
-attachTranscriptionWss(server);
+  const app = createApp(repo);
+  const server = http.createServer(app);
 
-server.listen(port, () => {
+  attachTranscriptionWss(server);
+
+  server.listen(port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Backend listening on port ${port} (HTTP + /transcription/stream WebSocket)`);
+  });
+}
+
+void start().catch((err) => {
   // eslint-disable-next-line no-console
-  console.log(`Backend listening on port ${port} (HTTP + /transcription/stream WebSocket)`);
+  console.error(err);
+  process.exit(1);
 });

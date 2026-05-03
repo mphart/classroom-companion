@@ -4,10 +4,21 @@ import logo from '@/assets/corner-logo.svg';
 import {
   createFolder,
   deleteItems,
+  generatePracticeExam,
   listItems,
   summarizeSelection,
   type ListedItemDto,
 } from '@/app/lib/api';
+import { Checkbox } from '@/app/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/app/components/ui/dialog';
+import { Input } from '@/app/components/ui/input';
+import { Label } from '@/app/components/ui/label';
 import { clearSession, getSessionUser } from '@/app/lib/authSession';
 import {
   joinDirectory,
@@ -34,6 +45,11 @@ export function Home() {
   const [sortBy, setSortBy] = useState<'name' | 'lastEdited' | 'created'>('name');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [examDialogOpen, setExamDialogOpen] = useState(false);
+  const [examIncludeMc, setExamIncludeMc] = useState(true);
+  const [examIncludeSa, setExamIncludeSa] = useState(true);
+  const [examQuestionCount, setExamQuestionCount] = useState(5);
+  const [examOther, setExamOther] = useState('');
 
   useEffect(() => {
     setCurrentDirectory(userRoot);
@@ -134,6 +150,52 @@ export function Home() {
       await loadItems();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGeneratePracticeExam = async () => {
+    if (!userRoot || selectedItems.size === 0) return;
+    if (!examIncludeMc && !examIncludeSa) {
+      setError('Choose at least one question type.');
+      return;
+    }
+    const count = Math.min(30, Math.max(1, Math.floor(Number(examQuestionCount)) || 0));
+    if (count < 1) {
+      setError('Question count must be between 1 and 30.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    const selected = items.filter((item) => selectedItems.has(item.id));
+    const noteIds = selected.filter((item) => item.type === 'note').map((item) => item.id);
+    const folderIds = selected.filter((item) => item.type === 'folder').map((item) => item.id);
+
+    try {
+      const titleSeed = `Practice Exam ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+      const title = titleSeed.length > 160 ? titleSeed.slice(0, 160) : titleSeed;
+
+      const result = await generatePracticeExam({
+        noteIds,
+        folderIds,
+        outputDirectory: userRoot,
+        title,
+        questionCount: count,
+        includeMultipleChoice: examIncludeMc,
+        includeShortAnswer: examIncludeSa,
+        otherInstructions: examOther.trim() || undefined,
+      });
+
+      setExamDialogOpen(false);
+      setCurrentDirectory(userRoot);
+      setSelectedItems(new Set());
+      setSelectionMode(false);
+      navigate('/practice-exam', { state: { noteId: result.note.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate practice exam');
     } finally {
       setLoading(false);
     }
@@ -340,15 +402,80 @@ export function Home() {
         </div>
 
         <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Generate AI Summary:</span> Uses Google Gemini on your backend
+          <span className="font-medium text-foreground">AI Summary &amp; practice exams:</span> Uses Google Gemini on your backend
           (<code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_API_KEY</code> in <code className="text-xs bg-muted px-1 py-0.5 rounded">backend/.env</code> or Compose;
           optional <code className="text-xs bg-muted px-1 py-0.5 rounded">GEMINI_MODEL</code>, default{' '}
           <code className="text-xs bg-muted px-1 py-0.5 rounded">gemini-flash-latest</code>). Turn on Select mode, pick notes
-          and/or folders (folders include all notes inside), then click Generate.
+          and/or folders (folders include all notes inside), then generate a summary or a practice exam.
         </div>
 
+        <Dialog open={examDialogOpen} onOpenChange={setExamDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Generate Exam Prep</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="exam-mc"
+                  checked={examIncludeMc}
+                  onCheckedChange={(v) => setExamIncludeMc(v === true)}
+                />
+                <Label htmlFor="exam-mc" className="font-normal cursor-pointer">
+                  Multiple Choice
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="exam-sa"
+                  checked={examIncludeSa}
+                  onCheckedChange={(v) => setExamIncludeSa(v === true)}
+                />
+                <Label htmlFor="exam-sa" className="font-normal cursor-pointer">
+                  Short answers
+                </Label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="exam-other-input" className="font-normal">
+                  Other
+                </Label>
+                <Input
+                  id="exam-other-input"
+                  placeholder="Custom instructions (optional)"
+                  value={examOther}
+                  onChange={(e) => setExamOther(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="exam-count">Question count</Label>
+                <Input
+                  id="exam-count"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={examQuestionCount}
+                  onChange={(e) => setExamQuestionCount(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-center">
+              <button
+                type="button"
+                disabled={
+                  loading || (!examIncludeMc && !examIncludeSa) || examQuestionCount < 1 || examQuestionCount > 30
+                }
+                onClick={() => void handleGeneratePracticeExam()}
+                className="px-6 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
+                style={{ backgroundColor: 'var(--brand)' }}
+              >
+                {loading ? 'Generating…' : 'Generate'}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {selectionMode && selectedItems.size > 0 && (
-          <div className="mb-6 flex items-center gap-3">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
             <button
               onClick={() => void handleGenerateSummary()}
               disabled={loading}
@@ -362,6 +489,21 @@ export function Home() {
               }
             >
               Generate AI Summary
+            </button>
+            <button
+              type="button"
+              onClick={() => setExamDialogOpen(true)}
+              disabled={loading}
+              className="px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50"
+              style={{ backgroundColor: 'var(--brand)' }}
+              onMouseEnter={(e) =>
+                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand-hover)')
+              }
+              onMouseLeave={(e) =>
+                loading ? undefined : (e.currentTarget.style.backgroundColor = 'var(--brand)')
+              }
+            >
+              Generate practice exam
             </button>
             <button
               onClick={() => void handleDelete()}
@@ -409,7 +551,9 @@ export function Home() {
                         ? '📁'
                         : item.noteSourceType === 'generated_summary'
                           ? '🧠'
-                          : '📄'}
+                          : item.noteSourceType === 'generated_practice_exam'
+                            ? '📝'
+                            : '📄'}
                     </span>
                     <h3 className="text-sm">{item.name}</h3>
                   </div>

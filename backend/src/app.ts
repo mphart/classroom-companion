@@ -11,8 +11,11 @@ import { createAuthRoutes } from "./routes/authRoutes";
 import { createFolderRoutes } from "./routes/folderRoutes";
 import { createItemRoutes } from "./routes/itemRoutes";
 import { createNoteRoutes } from "./routes/noteRoutes";
+import path from "path";
 
 dotenv.config();
+// Repo root `.env` (e.g. PRACTICE_API_KEY next to docker-compose); does not override keys already set from backend/.env
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 export const createApp = (repo: Repository) => {
   const app = express();

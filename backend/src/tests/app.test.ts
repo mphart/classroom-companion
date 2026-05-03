@@ -96,4 +96,53 @@ describe("MVP backend routes", () => {
     expect(summarizeSelection.body.note.sourceType).toBe("generated_summary");
     expect(summarizeSelection.body.sourceCount).toBeGreaterThanOrEqual(2);
   });
+
+  it("generates practice exam from selection and grades short answers", async () => {
+    const { app, token } = await bootstrap();
+    await request(app).post("/folders").set("Authorization", `Bearer ${token}`).send({
+      name: "Math",
+      directory: "1/",
+    });
+    const noteRes = await request(app).post("/notes").set("Authorization", `Bearer ${token}`).send({
+      title: "Lecture 1",
+      directory: "1/Math/",
+      rawText: "Primary colors include red, blue, and yellow. Two plus two equals four.",
+      language: "English",
+      durationSeconds: 600,
+    });
+    const noteId = noteRes.body.note.id as number;
+
+    const gen = await request(app)
+      .post("/ai/practice-exam/generate")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteIds: [noteId],
+        folderIds: [],
+        outputDirectory: "1/",
+        title: "Practice Quiz",
+        questionCount: 2,
+        includeMultipleChoice: true,
+        includeShortAnswer: true,
+        otherInstructions: "Keep it simple.",
+      });
+    expect(gen.status).toBe(201);
+    expect(gen.body.note.sourceType).toBe("generated_practice_exam");
+    const examNoteId = gen.body.note.id as number;
+    const raw = JSON.parse(gen.body.note.rawText as string) as { questions: Array<{ type: string }> };
+    expect(raw.questions).toHaveLength(2);
+    const saIndex = raw.questions.findIndex((q) => q.type === "short_answer");
+    expect(saIndex).toBeGreaterThanOrEqual(0);
+
+    const grade = await request(app)
+      .post("/ai/practice-exam/grade")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        noteId: examNoteId,
+        responses: [{ questionIndex: saIndex, answer: "red" }],
+      });
+    expect(grade.status).toBe(200);
+    expect(grade.body.results).toHaveLength(1);
+    expect(grade.body.results[0].questionIndex).toBe(saIndex);
+    expect(["correct", "partial", "incorrect"]).toContain(grade.body.results[0].verdict);
+  });
 });
